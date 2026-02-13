@@ -20,17 +20,17 @@ class Class(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     code = Column(Text, nullable=False)
     name = Column(Text, nullable=False)
-    section = Column(Text, nullable=True)
+    section = Column(Text, nullable=False)
     ltp_pattern = Column(Text)  # e.g., "3-1-0"
     teacher_type = Column(Text)  # 'lecture' or 'practical'
     practical_group = Column(Text)
-    teacher_user_id = Column(Integer, ForeignKey("users.user_id", ondelete="RESTRICT"), nullable=True)
+    teacher_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
     
     # Unique constraint: same teacher can't have duplicate class for same course/section
     __table_args__ = (
-        UniqueConstraint('teacher_user_id', 'code', 'section', name='uq_teacher_class_section'),
+        UniqueConstraint('teacher_id', 'code', 'section', name='uq_teacher_class_section'),
     )
     
     # Relationships
@@ -93,7 +93,7 @@ class ClassStudent(Base):
     __tablename__ = "class_students"
     
     class_id = Column(UUID(as_uuid=True), ForeignKey("classes.id", ondelete="CASCADE"), primary_key=True)
-    student_id = Column(Integer, ForeignKey("students.student_id"), primary_key=True)
+    student_id = Column(UUID(as_uuid=True), ForeignKey("students.id"), primary_key=True)
     added_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     
     # Relationships

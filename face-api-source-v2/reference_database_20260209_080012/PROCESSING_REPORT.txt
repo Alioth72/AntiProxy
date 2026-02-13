@@ -1,0 +1,71 @@
+
+REFERENCE DATABASE GENERATION REPORT
+=====================================
+
+Processing Summary:
+- Total images: 94
+- Successfully processed: 94
+- Failed processing: 0
+- Success rate: 100.0%
+
+People in Database:
+ 1. Aarushi              | Embedding: [512] | Confidence: 0.876
+ 2. Aaryaman             | Embedding: [512] | Confidence: 0.789
+ 3. Abhinav              | Embedding: [512] | Confidence: 0.755
+ 4. Akansh               | Embedding: [512] | Confidence: 0.744
+ 5. Aman                 | Embedding: [512] | Confidence: 0.879
+ 6. Amlan                | Embedding: [512] | Confidence: 0.785
+ 7. Aneesh               | Embedding: [512] | Confidence: 0.820
+ 8. Anugya               | Embedding: [512] | Confidence: 0.809
+ 9. Armaan               | Embedding: [512] | Confidence: 0.778
+10. Arpit                | Embedding: [512] | Confidence: 0.895
+11. Aryanb               | Embedding: [512] | Confidence: 0.883
+12. Ashwin               | Embedding: [512] | Confidence: 0.914
+13. Avyaan               | Embedding: [512] | Confidence: 0.719
+14. Ayush                | Embedding: [512] | Confidence: 0.829
+15. Devansh              | Embedding: [512] | Confidence: 0.876
+16. Dheeraj              | Embedding: [512] | Confidence: 0.803
+17. Himani               | Embedding: [512] | Confidence: 0.863
+18. Ishansh              | Embedding: [512] | Confidence: 0.851
+19. Kartik               | Embedding: [512] | Confidence: 0.818
+20. Kartik P             | Embedding: [512] | Confidence: 0.893
+21. Kushagra             | Embedding: [512] | Confidence: 0.691
+22. Kushal               | Embedding: [512] | Confidence: 0.816
+23. Lavanika             | Embedding: [512] | Confidence: 0.893
+24. Mayank               | Embedding: [512] | Confidence: 0.841
+25. Naman                | Embedding: [512] | Confidence: 0.606
+26. Nikunj               | Embedding: [512] | Confidence: 0.863
+27. Odwitiyo             | Embedding: [512] | Confidence: 0.883
+28. Pihu                 | Embedding: [512] | Confidence: 0.818
+29. Praganya             | Embedding: [512] | Confidence: 0.849
+30. Pranay               | Embedding: [512] | Confidence: 0.887
+31. Prisha               | Embedding: [512] | Confidence: 0.848
+32. Puneet               | Embedding: [512] | Confidence: 0.806
+33. Rajat                | Embedding: [512] | Confidence: 0.863
+34. Riddhi               | Embedding: [512] | Confidence: 0.888
+35. Ridhwan              | Embedding: [512] | Confidence: 0.718
+36. Rudransh             | Embedding: [512] | Confidence: 0.777
+37. Saksham Jain         | Embedding: [512] | Confidence: 0.832
+38. Sarthak              | Embedding: [512] | Confidence: 0.850
+39. Shanjan              | Embedding: [512] | Confidence: 0.803
+40. Shivaay              | Embedding: [512] | Confidence: 0.661
+41. Shreshth             | Embedding: [512] | Confidence: 0.842
+42. Shubhank             | Embedding: [512] | Confidence: 0.884
+43. Sukriti              | Embedding: [512] | Confidence: 0.814
+44. Taher                | Embedding: [512] | Confidence: 0.803
+45. Ujjwal               | Embedding: [512] | Confidence: 0.759
+46. Vishrut              | Embedding: [512] | Confidence: 0.784
+47. Vivaan               | Embedding: [512] | Confidence: 0.761
+
+Database Statistics:
+- Average embedding norm: 23.037944
+- Embedding dimension: [512]
+
+Files Generated:
+- Reference database: reference_database.json
+- Individual embeddings: embeddings/*.npy
+- Processed faces: processed_images/*.jpg
+- Debug steps: debug_steps/*/
+- Processing logs: logs/*.json
+
+Database ready for face recognition!

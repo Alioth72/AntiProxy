@@ -18,13 +18,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
+# Make migration script executable
+RUN chmod +x run_with_migrations.sh
+
 # Create a non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Expose port (Cloud Run default is 8080)
-ENV PORT=8080
-EXPOSE 8080
+# Expose port (Cloud Run uses 8000)
+EXPOSE 8000
 
-# Start server (run migrations manually once)
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+# Start server - defaults to port 8000 if PORT not set
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

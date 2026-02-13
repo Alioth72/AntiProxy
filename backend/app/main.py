@@ -9,19 +9,7 @@ import logging
 
 from app.config import settings
 from app.db import engine, Base
-from app.routes import (
-    auth_routes,
-    user_routes,
-    class_routes,
-    attendance_routes,
-    stats_routes,
-    reschedule_routes,
-    storage,
-    student_routes,
-    notification_routes,
-    leaderboard_routes,
-    ondemand_routes,
-)
+from app.routes import auth_routes, user_routes, class_routes, attendance_routes, stats_routes, reschedule_routes, storage, student_routes
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -98,11 +86,6 @@ app.include_router(stats_routes.router)
 app.include_router(reschedule_routes.router)
 app.include_router(storage.router)
 app.include_router(student_routes.router)
-app.include_router(notification_routes.router)
-app.include_router(leaderboard_routes.router)
-app.include_router(ondemand_routes.router)
-app.include_router(notification_routes.router)
-app.include_router(leaderboard_routes.router)
 
 
 # Root endpoint

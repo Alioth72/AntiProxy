@@ -2,22 +2,22 @@
 Attendance session and status models.
 """
 import enum
-import uuid
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Date, Boolean, Numeric, UniqueConstraint, Integer
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Date, Boolean, Numeric, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy import Enum as SQLEnum
+import uuid
 
 from app.db import Base
 
 
 class AttendanceStatus(str, enum.Enum):
     """Attendance status enumeration."""
-    PRESENT = "PRESENT"
-    ABSENT = "ABSENT"
-    LATE = "LATE"
-    EXCUSED = "EXCUSED"
+    PRESENT = "present"
+    ABSENT = "absent"
+    LATE = "late"
+    EXCUSED = "excused"
 
 
 class AttendanceSession(Base):
@@ -25,23 +25,18 @@ class AttendanceSession(Base):
     One attendance-taking event for a class on a specific date.
     e.g., "IT307-D attendance on 2025-10-08"
     """
-    __tablename__ = "sessions"
+    __tablename__ = "attendance_sessions"
     
-    session_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    class_id = Column(UUID(as_uuid=True), ForeignKey("classes.id", ondelete="CASCADE"), nullable=True)
-    course_id = Column(Integer, ForeignKey("courses.course_id"), nullable=True)
-    section_id = Column(Integer, ForeignKey("sections.section_id"), nullable=True)
-    teacher_user_id = Column(Integer, ForeignKey("users.user_id"), nullable=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    class_id = Column(UUID(as_uuid=True), ForeignKey("classes.id", ondelete="CASCADE"), nullable=False)
+    teacher_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     session_date = Column(Date, nullable=False)
-    start_time = Column(String, nullable=True)
-    end_time = Column(String, nullable=True)
-    topic = Column(Text, nullable=True)
-    processed_image_url = Column(Text)
+    processed_image_url = Column(Text)  # proof image / processed face sheet
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     
     # Prevent duplicate sessions for same class on same date
     __table_args__ = (
-        UniqueConstraint('class_id', 'session_date', name='uq_sessions_class_date'),
+        UniqueConstraint('class_id', 'session_date', name='uq_session_class_date'),
     )
     
     # Relationships
@@ -55,19 +50,13 @@ class AttendanceStatusRecord(Base):
     Per-student attendance record for a specific session.
     This replaces the Firestore "studentStatuses" map.
     """
-    __tablename__ = "attendance"
+    __tablename__ = "attendance_statuses"
     
-    attendance_id = Column(Integer, primary_key=True, autoincrement=True)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id", ondelete="CASCADE"), nullable=False)
-    student_id = Column(Integer, ForeignKey("students.student_id"), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("attendance_sessions.id", ondelete="CASCADE"), primary_key=True)
+    student_id = Column(UUID(as_uuid=True), ForeignKey("students.id"), primary_key=True)
     status = Column(SQLEnum(AttendanceStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=AttendanceStatus.ABSENT)
-    marked_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     recognized_by_ai = Column(Boolean, nullable=False, default=False)
     similarity_score = Column(Numeric(5, 2))  # AI confidence percentage or similarity
-    
-    __table_args__ = (
-        UniqueConstraint('session_id', 'student_id', name='uq_attendance_session_student'),
-    )
     
     # Relationships
     session = relationship("AttendanceSession", back_populates="statuses")

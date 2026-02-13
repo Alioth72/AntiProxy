@@ -272,28 +272,5 @@ class AzureStorageService:
         return container_client.list_blobs(name_starts_with=prefix)
 
 
-# Singleton instance (lazy initialization to avoid crashes if Azure is not configured)
-_azure_storage_instance = None
-
-def get_azure_storage() -> Optional[AzureStorageService]:
-    """Get Azure Storage instance, or None if not configured."""
-    global _azure_storage_instance
-    if _azure_storage_instance is None:
-        if not settings.azure_storage_connection_string:
-            return None
-        try:
-            _azure_storage_instance = AzureStorageService()
-        except Exception as e:
-            print(f"Warning: Azure Storage not available: {e}")
-            return None
-    return _azure_storage_instance
-
-# For backward compatibility, try to initialize if connection string exists
-try:
-    if settings.azure_storage_connection_string:
-        azure_storage = AzureStorageService()
-    else:
-        azure_storage = None
-except Exception as e:
-    print(f"Warning: Azure Storage initialization failed: {e}")
-    azure_storage = None
+# Singleton instance
+azure_storage = AzureStorageService()

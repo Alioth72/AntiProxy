@@ -166,7 +166,7 @@ def upgrade() -> None:
 
     # Sessions
     op.create_table(
-        "sessions",
+        "attendance_sessions",
         sa.Column("session_id", sa.dialects.postgresql.UUID(), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("class_id", sa.dialects.postgresql.UUID(), sa.ForeignKey("classes.class_id"), nullable=True),
         sa.Column("course_id", sa.Integer(), sa.ForeignKey("courses.course_id"), nullable=True),
@@ -183,9 +183,9 @@ def upgrade() -> None:
 
     # Attendance
     op.create_table(
-        "attendance",
+        "attendance_statuses",
         sa.Column("attendance_id", sa.BigInteger(), primary_key=True, autoincrement=True),
-        sa.Column("session_id", sa.dialects.postgresql.UUID(), sa.ForeignKey("sessions.session_id"), nullable=False),
+        sa.Column("session_id", sa.dialects.postgresql.UUID(), sa.ForeignKey("attendance_sessions.session_id"), nullable=False),
         sa.Column("student_id", sa.Integer(), sa.ForeignKey("students.student_id"), nullable=False),
         sa.Column(
             "status",
@@ -330,8 +330,8 @@ def upgrade() -> None:
             END AS percentage
         FROM class_students cs
         JOIN students s ON cs.student_id = s.student_id
-        LEFT JOIN sessions sess ON sess.class_id = cs.class_id
-        LEFT JOIN attendance a ON a.session_id = sess.session_id AND a.student_id = cs.student_id
+        LEFT JOIN attendance_sessions sess ON sess.class_id = cs.class_id
+        LEFT JOIN attendance_statuses a ON a.session_id = sess.session_id AND a.student_id = cs.student_id
         GROUP BY cs.class_id, cs.student_id, s.university_roll, s.name;
         """
     )

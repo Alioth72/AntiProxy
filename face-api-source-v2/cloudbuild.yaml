@@ -1,0 +1,31 @@
+steps:
+  # Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/antiproxy-dtu/face-api-repo/face-api:latest'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/antiproxy-dtu/face-api-repo/face-api:$BUILD_ID'
+      - '.'
+
+  # Push to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-south1-docker.pkg.dev/antiproxy-dtu/face-api-repo/face-api:latest'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-south1-docker.pkg.dev/antiproxy-dtu/face-api-repo/face-api:$BUILD_ID'
+
+images:
+  - 'asia-south1-docker.pkg.dev/antiproxy-dtu/face-api-repo/face-api:latest'
+  - 'asia-south1-docker.pkg.dev/antiproxy-dtu/face-api-repo/face-api:$BUILD_ID'
+
+options:
+  machineType: 'N1_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: '3600s'

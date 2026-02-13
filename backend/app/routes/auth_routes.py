@@ -39,14 +39,14 @@ async def google_login(request: GoogleLoginRequest, db: Session = Depends(get_db
     email = google_info['email']
     name = google_info.get('name', email.split('@')[0])
     
-    # Check if email is in allowed list (optional; if missing, fallback to TEACHER)
+    # Check if email is in allowed list
     allowed = db.query(AllowedEmail).filter(AllowedEmail.email == email).first()
-    allowed_role = UserRole.TEACHER
-    if allowed:
-        try:
-            allowed_role = allowed.role if isinstance(allowed.role, UserRole) else UserRole(allowed.role)
-        except Exception:
-            allowed_role = UserRole.TEACHER
+    
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your email is not authorized to access this system. Please contact an administrator."
+        )
     
     # Get or create user
     user = db.query(User).filter(User.email == email).first()
@@ -60,7 +60,7 @@ async def google_login(request: GoogleLoginRequest, db: Session = Depends(get_db
         user = User(
             email=email,
             name=name,
-            role=allowed_role,
+            role=allowed.role,
             last_login_at=datetime.utcnow()
         )
         db.add(user)
@@ -69,17 +69,14 @@ async def google_login(request: GoogleLoginRequest, db: Session = Depends(get_db
     db.refresh(user)
     
     # Generate JWT
-    token = create_jwt(user.uuid, user.email, user.role.value)
+    token = create_jwt(user.id, user.email, user.role.value)
     
     # Prepare response
     user_info = UserInfo(
-        userId=user.user_id,
-        uuid=user.uuid,
+        id=user.id,
         email=user.email,
         name=user.name,
-        role=user.role.value,
-        studentId=None,
-        studentUuid=None,
+        role=user.role.value
     )
     
     return TokenResponse(token=token, user=user_info)
@@ -92,11 +89,10 @@ async def google_login_student(request: GoogleLoginRequest, db: Session = Depend
     
     Flow:
     1. Verify Google ID token
-    2. Check if email is in allowed_student_emails whitelist
-    3. Check if email belongs to a registered student (for class enrollment)
-    4. Create/update user record with student role
-    5. Generate internal JWT
-    6. Return JWT and user info
+    2. Check if email belongs to a registered student
+    3. Create/update user record with student role
+    4. Generate internal JWT
+    5. Return JWT and user info
     """
     # Verify Google token
     try:
@@ -110,10 +106,16 @@ async def google_login_student(request: GoogleLoginRequest, db: Session = Depend
     email = google_info['email']
     name = google_info.get('name', email.split('@')[0])
     
-    # Lookup student record (no whitelist enforcement)
+    # Check if email belongs to a student in the database
     student = db.query(Student).filter(
         (Student.email == email) | (Student.dtu_email == email)
     ).first()
+    
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your email is not registered as a student. Please contact an administrator."
+        )
     
     # Get or create user record with student role
     user = db.query(User).filter(User.email == email).first()
@@ -134,22 +136,18 @@ async def google_login_student(request: GoogleLoginRequest, db: Session = Depend
         db.add(user)
     
     db.commit()
-    if student:
-        db.refresh(student)
     db.refresh(user)
     
     # Generate JWT with student role
-    token = create_jwt(user.uuid, user.email, user.role.value)
+    token = create_jwt(user.id, user.email, user.role.value)
     
-    # Prepare response - include student ID if they're enrolled in classes
+    # Prepare response with student ID included
     user_info = UserInfo(
-        userId=user.user_id,
-        uuid=user.uuid,
+        id=user.id,
         email=user.email,
         name=user.name,
         role=user.role.value,
-        studentId=student.student_id if student else None,
-        studentUuid=student.uuid if student else None,
+        studentId=str(student.id)  # Include student ID for frontend
     )
     
     return TokenResponse(token=token, user=user_info)

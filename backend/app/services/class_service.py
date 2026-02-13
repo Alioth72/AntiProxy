@@ -9,7 +9,7 @@ from fastapi import HTTPException, status
 
 from app.models.class_model import Class, ClassSchedule, ClassReschedule, ClassStudent
 from app.models.student import Student
-from app.models.user import User, UserRole, AllowedStudentEmail
+from app.models.user import User, UserRole
 from app.schemas.classes import ClassResponse, ScheduleInfo, RescheduleInfo, StudentInClass, StudentInput
 
 
@@ -280,91 +280,10 @@ def update_class_students(
         if not enrollment:
             enrollment = ClassStudent(class_id=class_id, student_id=student.id)
             db.add(enrollment)
-        
-        # Auto-add student emails to allowed_student_emails table
-        # This enables students to log into the student app
-        if student_input.email or student_input.dtu_email:
-            _add_to_allowed_student_emails(db, student_input, student)
     
     db.commit()
     
     # Return updated roster
-    return get_class_students_list(db, class_id)
-
-
-def _add_to_allowed_student_emails(db: Session, student_input: StudentInput, student: Student):
-    """
-    Add student email to allowed_student_emails table if not already present.
-    This is called automatically when a teacher uploads student data.
-    """
-    # Clean up 'NULL' strings to actual None
-    email = student_input.email if student_input.email and student_input.email.upper() != 'NULL' else None
-    dtu_email = student_input.dtu_email if student_input.dtu_email and student_input.dtu_email.upper() != 'NULL' else None
-    
-    # Check by primary email
-    if email:
-        existing = db.query(AllowedStudentEmail).filter(
-            AllowedStudentEmail.email == email
-        ).first()
-        
-        if not existing:
-            # Create new allowed student email entry
-            allowed = AllowedStudentEmail(
-                email=email,
-                dtu_email=dtu_email,
-                roll_no=student_input.roll_no,
-                name=student_input.name,
-                program=student_input.program
-            )
-            db.add(allowed)
-        else:
-            # Update existing entry with additional info
-            if dtu_email and not existing.dtu_email:
-                existing.dtu_email = dtu_email
-            if student_input.roll_no and not existing.roll_no:
-                existing.roll_no = student_input.roll_no
-            if student_input.name and not existing.name:
-                existing.name = student_input.name
-            existing.updated_at = datetime.utcnow()
-    
-    # Also check by DTU email if different from primary
-    if dtu_email and dtu_email != email:
-        existing_dtu = db.query(AllowedStudentEmail).filter(
-            AllowedStudentEmail.dtu_email == dtu_email
-        ).first()
-        
-        if not existing_dtu:
-            # Check if this DTU email should be added as primary for another entry
-            existing_by_email = db.query(AllowedStudentEmail).filter(
-                AllowedStudentEmail.email == dtu_email
-            ).first()
-            
-            if not existing_by_email:
-                # Create entry with DTU email as primary if no personal email
-                if not email:
-                    allowed = AllowedStudentEmail(
-                        email=dtu_email,
-                        roll_no=student_input.roll_no,
-                        name=student_input.name,
-                        program=student_input.program
-                    )
-                    db.add(allowed)
-
-
-
-def delete_class(db: Session, class_id: UUID, user_id: UUID, role: UserRole) -> None:
-    """
-    Delete a class and all related data if the requester owns it or is admin.
-    """
-    cls = verify_class_ownership(db, class_id, user_id, role)
-    db.delete(cls)
-    db.commit()
-
-
-def get_class_students_list(db: Session, class_id: UUID) -> List[dict]:
-    """
-    Get the list of students enrolled in a class.
-    """
     enrollments = db.query(ClassStudent).filter(
         ClassStudent.class_id == class_id
     ).options(joinedload(ClassStudent.student)).all()

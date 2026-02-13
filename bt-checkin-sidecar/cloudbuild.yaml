@@ -1,0 +1,27 @@
+steps:
+  # Build the Docker image for BT Check-in Sidecar
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/antiproxy-dtu/dtu-aims-repo/bt-sidecar:latest'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/antiproxy-dtu/dtu-aims-repo/bt-sidecar:$BUILD_ID'
+      - '.'
+
+  # Push to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-south1-docker.pkg.dev/antiproxy-dtu/dtu-aims-repo/bt-sidecar:latest'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-south1-docker.pkg.dev/antiproxy-dtu/dtu-aims-repo/bt-sidecar:$BUILD_ID'
+
+images:
+  - 'asia-south1-docker.pkg.dev/antiproxy-dtu/dtu-aims-repo/bt-sidecar:latest'
+  - 'asia-south1-docker.pkg.dev/antiproxy-dtu/dtu-aims-repo/bt-sidecar:$BUILD_ID'
+
+timeout: '900s'

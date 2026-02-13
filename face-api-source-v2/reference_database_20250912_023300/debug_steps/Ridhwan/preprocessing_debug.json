@@ -1,0 +1,64 @@
+{
+  "01_original_shape": [
+    230,
+    189,
+    3
+  ],
+  "02_alignment_angle": -7.989326766396897,
+  "03_eye_center": [
+    82,
+    111
+  ],
+  "04_left_eye": [
+    54,
+    115
+  ],
+  "05_right_eye": [
+    111,
+    107
+  ],
+  "06_crop_size_source": "bbox",
+  "06_crop_size": 147,
+  "07_aligned_shape": [
+    254,
+    219,
+    3
+  ],
+  "08_rotated_landmarks": {
+    "left_eye": [
+      81,
+      127
+    ],
+    "right_eye": [
+      138,
+      127
+    ],
+    "nose": [
+      105,
+      152
+    ],
+    "mouth_left": [
+      82,
+      176
+    ],
+    "mouth_right": [
+      139,
+      177
+    ]
+  },
+  "09_face_center": [
+    108,
+    134
+  ],
+  "10_cropped_shape": [
+    146,
+    146,
+    3
+  ],
+  "11_final_shape": [
+    112,
+    112,
+    3
+  ],
+  "success": true
+}

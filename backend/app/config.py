@@ -35,9 +35,6 @@ class Settings(BaseSettings):
     azure_storage_connection_string: Optional[str] = None
     azure_storage_account_name: str = "aimsattendanceapp"
     
-    # Face Recognition Service
-    face_api_service_url: Optional[str] = None
-    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

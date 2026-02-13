@@ -1,0 +1,31 @@
+steps:
+  # Build the Docker image for DTU AIMS Backend
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/antiproxy-dtu/dtu-aims-repo/backend:latest'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/antiproxy-dtu/dtu-aims-repo/backend:$BUILD_ID'
+      - '.'
+
+  # Push to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-south1-docker.pkg.dev/antiproxy-dtu/dtu-aims-repo/backend:latest'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-south1-docker.pkg.dev/antiproxy-dtu/dtu-aims-repo/backend:$BUILD_ID'
+
+images:
+  - 'asia-south1-docker.pkg.dev/antiproxy-dtu/dtu-aims-repo/backend:latest'
+  - 'asia-south1-docker.pkg.dev/antiproxy-dtu/dtu-aims-repo/backend:$BUILD_ID'
+
+options:
+  machineType: 'N1_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: '1800s'

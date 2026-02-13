@@ -1,5 +1,5 @@
 """
- script to populate allowed_emails table with initial faculty/admin emails.
+Seed script to populate allowed_emails table with initial faculty/admin emails.
 """
 import sys
 import os
@@ -12,7 +12,7 @@ from app.db import SessionLocal
 from app.models.user import AllowedEmail, UserRole
 
 
-def _allowed_emails():
+def seed_allowed_emails():
     """
     Populate the allowed_emails table with initial faculty/admin emails.
     
@@ -29,39 +29,9 @@ def _allowed_emails():
                 "role": UserRole.TEACHER
             },
             {
-                "email": "vivjain2007@gmail.com",
-                "name": "Vivaan Jain",
-                "role": UserRole.TEACHER
-            },
-            {
-                "email": "aaarat72@gmail.com",
-                "name": "Aaarat Chaddha",
-                "role": UserRole.TEACHER
-            },
-            {
-                "email": "rudranshsinghrathore15@gmail.com",
-                "name": "Rudransh Singh Rathore",
-                "role": UserRole.TEACHER
-            },
-            {
-                "email": "007aryansood@gmail.com ",
-                "name": "Aryan Sood",
-                "role": UserRole.TEACHER
-            },
-            {
-                "email": "aforaarushianand@gmail.com",
-                "name": "Aarushi Anand",
-                "role": UserRole.TEACHER
-            },
-            {
                 "email": "admin@dtu.ac.in",
                 "name": "System Administrator",
                 "role": UserRole.ADMIN
-            },
-            {
-                "email": "shubhankgupta165@gmail.com",
-                "name": "Shubhank Gupta",
-                "role": UserRole.TEACHER
             },
             {
                 "email": "teacher1@dtu.ac.in",
@@ -83,26 +53,23 @@ def _allowed_emails():
             ).first()
             
             if existing:
-                # Update existing record
-                existing.name = email_data["name"]
-                existing.role = email_data["role"]
-                db.add(existing)
-                print(f"Updated {email_data['email']} ({email_data['role'].value})")
-            else:
-                # Create new allowed email
-                allowed_email = AllowedEmail(
-                    email=email_data["email"],
-                    name=email_data["name"],
-                    role=email_data["role"]
-                )
-                db.add(allowed_email)
-                print(f"Added {email_data['email']} ({email_data['role'].value})")
+                print(f"Email {email_data['email']} already exists, skipping...")
+                continue
+            
+            # Create new allowed email
+            allowed_email = AllowedEmail(
+                email=email_data["email"],
+                name=email_data["name"],
+                role=email_data["role"]
+            )
+            db.add(allowed_email)
+            print(f"Added {email_data['email']} ({email_data['role'].value})")
         
         db.commit()
-        print("\n✅ Successfully ed allowed_emails table")
+        print("\n✅ Successfully seeded allowed_emails table")
         
     except Exception as e:
-        print(f"\n❌ Error ing database: {e}")
+        print(f"\n❌ Error seeding database: {e}")
         db.rollback()
         raise
         
@@ -111,5 +78,5 @@ def _allowed_emails():
 
 
 if __name__ == "__main__":
-    print("ing allowed_emails table...\n")
-    _allowed_emails()
+    print("Seeding allowed_emails table...\n")
+    seed_allowed_emails()

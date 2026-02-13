@@ -11,7 +11,7 @@ from datetime import time
 from app.db import get_db
 from app.auth.dependencies import get_current_user, require_teacher_or_admin, UserContext
 from app.schemas.classes import UpdateStudentsRequest
-from app.services.class_service import get_classes_for_user, update_class_students, create_class, delete_class
+from app.services.class_service import get_classes_for_user, update_class_students, create_class
 from app.models.class_model import ClassSchedule
 
 router = APIRouter(prefix="/classes", tags=["Classes"])
@@ -106,19 +106,6 @@ async def list_classes(
     """
     classes = get_classes_for_user(db, current_user.user_id, current_user.role)
     return classes
-
-
-
-@router.delete("/{class_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_class(
-    class_id: UUID,
-    current_user: UserContext = Depends(require_teacher_or_admin),
-    db: Session = Depends(get_db)
-):
-    """
-    Delete a class and all related records.
-    """
-    delete_class(db, class_id, current_user.user_id, current_user.role)
 
 
 @router.put("/{class_id}/students")

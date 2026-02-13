@@ -47,7 +47,6 @@ async def get_my_classes(
     
     Returns:
         List of classes with basic info (code, name, section, teacher name, schedule)
-        Empty list if student exists but not enrolled in any classes yet
     """
     # Find the student record by email
     student = db.query(Student).filter(
@@ -55,9 +54,10 @@ async def get_my_classes(
     ).first()
     
     if not student:
-        # Student is in allowed_student_emails but not enrolled in any class yet
-        # Return empty list instead of error
-        return []
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student record not found"
+        )
     
     # Get all classes the student is enrolled in
     query = text("""
@@ -235,61 +235,3 @@ async def get_my_attendance_for_class(
         percentage=percentage,
         records=records
     )
-
-
-@router.get("/me/photo")
-async def get_my_photo(
-    current_user: UserContext = Depends(require_student),
-    db: Session = Depends(get_db)
-):
-    """
-    Get the current student's photo URL.
-    
-    Returns:
-        - photo_url: URL of the student's photo (null if not uploaded)
-        - has_photo: Boolean indicating if photo exists
-    """
-    # Find student record by email - try multiple approaches
-    student = db.query(Student).filter(
-        (Student.email == current_user.email) | (Student.dtu_email == current_user.email)
-    ).first()
-    
-    # If not found, try to find by enrolled classes (student might exist but email doesn't match)
-    if not student:
-        from app.models.class_model import ClassStudent
-        from app.models.user import AllowedStudentEmail
-        
-        # Check allowed_student_emails first
-        allowed_student = db.query(AllowedStudentEmail).filter(
-            (AllowedStudentEmail.email == current_user.email) | 
-            (AllowedStudentEmail.dtu_email == current_user.email)
-        ).first()
-        
-        if allowed_student:
-            # Try to find by roll_no from allowed_student_emails
-            student = db.query(Student).filter(
-                Student.roll_no == allowed_student.roll_no
-            ).first()
-        
-        # If still not found, try enrolled classes
-        if not student:
-            email_prefix = current_user.email.split('@')[0].lower()
-            enrolled_student = db.query(Student).join(ClassStudent).filter(
-                (Student.email.ilike(f"%{email_prefix}%")) |
-                (Student.dtu_email.ilike(f"%{email_prefix}%"))
-            ).first()
-            
-            if enrolled_student:
-                student = enrolled_student
-    
-    if not student:
-        # Return empty response instead of error - student might not have uploaded photo yet
-        return {
-            "photo_url": None,
-            "has_photo": False
-        }
-    
-    return {
-        "photo_url": student.photo_url,
-        "has_photo": student.photo_url is not None
-    }

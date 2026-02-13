@@ -17,7 +17,7 @@ class StudentClassInfo(BaseModel):
     id: str
     code: str
     name: str
-    section: str | None = None
+    section: str
     teacherType: Optional[str] = None
     ltpPattern: Optional[str] = None
     practicalGroup: Optional[str] = None
@@ -32,7 +32,7 @@ class StudentClassInfo(BaseModel):
 class AttendanceRecord(BaseModel):
     """Single attendance record for a student."""
     date: str  # ISO date format
-    status: str  # PRESENT, ABSENT, LATE, EXCUSED
+    status: str  # present, absent, late, excused
     recognizedByAi: bool = False
     similarityScore: Optional[float] = None
 

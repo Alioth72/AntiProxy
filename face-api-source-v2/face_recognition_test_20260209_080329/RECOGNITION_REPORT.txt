@@ -1,0 +1,107 @@
+
+FACE RECOGNITION TEST REPORT
+============================
+
+Image: WhatsApp Image 2026-02-07 at 16.12.05.jpg
+Total faces detected: 15
+Processing timestamp: 2026-02-09T08:03:32.984713
+
+Face Recognition Results:
+-------------------------
+Face 1: Rudransh
+  - Similarity: 0.19048010690493478
+  - Confidence: LOW
+  - Detection confidence: 0.8896052837371826
+
+Face 2: Puneet
+  - Similarity: 0.5637772865017087
+  - Confidence: MEDIUM
+  - Detection confidence: 0.8890543580055237
+
+Face 3: Ashwin
+  - Similarity: 0.5127627929731727
+  - Confidence: LOW
+  - Detection confidence: 0.8769093751907349
+
+Face 4: Rajat
+  - Similarity: 0.5238474920167936
+  - Confidence: LOW
+  - Detection confidence: 0.8759050369262695
+
+Face 5: Kartik P
+  - Similarity: 0.27726428907788236
+  - Confidence: LOW
+  - Detection confidence: 0.8706535696983337
+
+Face 6: Kartik
+  - Similarity: 0.15778430967310697
+  - Confidence: LOW
+  - Detection confidence: 0.8515037298202515
+
+Face 7: Ridhwan
+  - Similarity: 0.23559625940334736
+  - Confidence: LOW
+  - Detection confidence: 0.8416088819503784
+
+Face 8: Praganya
+  - Similarity: 0.2654198184701924
+  - Confidence: LOW
+  - Detection confidence: 0.8398860692977905
+
+Face 9: Shreshth
+  - Similarity: 0.25061591509011927
+  - Confidence: LOW
+  - Detection confidence: 0.8386242389678955
+
+Face 10: Ayush
+  - Similarity: 0.35863805745784855
+  - Confidence: LOW
+  - Detection confidence: 0.826030969619751
+
+Face 11: Kartik
+  - Similarity: 0.40286263506302494
+  - Confidence: LOW
+  - Detection confidence: 0.8257015943527222
+
+Face 12: Abhinav
+  - Similarity: 0.34051977419345814
+  - Confidence: LOW
+  - Detection confidence: 0.8222894668579102
+
+Face 13: Anugya
+  - Similarity: 0.4490967409611944
+  - Confidence: LOW
+  - Detection confidence: 0.8055915832519531
+
+Face 14: Kartik
+  - Similarity: 0.23699108896064802
+  - Confidence: LOW
+  - Detection confidence: 0.8029617071151733
+
+Face 15: Pihu
+  - Similarity: 0.4327990415742276
+  - Confidence: LOW
+  - Detection confidence: 0.7906129360198975
+
+
+Recognition Statistics:
+----------------------
+- Similarity threshold: 0.7 (cosine similarity)
+- Reference database: 47 people
+- High confidence matches: 0
+- Medium confidence matches: 1
+- Low confidence matches: 14
+
+Output Files:
+-------------
+- Annotated image: annotated_images/02_annotated_result.jpg
+- Individual face results: debug_steps/face_*/recognition_result.json
+- Complete results: results/recognition_results.json
+- Debug steps: debug_steps/face_*/
+
+Legend:
+-------
+🟢 GREEN box: High confidence match (cosine similarity > 0.7)
+🟠 ORANGE box: Medium confidence match (cosine similarity > 0.5499999999999999)
+🔴 RED box: Low confidence match (cosine similarity <= 0.5499999999999999)
+⚫ GRAY box: No embedding extracted

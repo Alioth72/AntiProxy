@@ -33,20 +33,14 @@ class RescheduleInfo(BaseModel):
 
 class StudentInClass(BaseModel):
     """Student information within a class roster."""
-    studentId: int = Field(..., alias="studentId")
-    studentUuid: Optional[UUID] = Field(None, alias="studentUuid")
-    universityRoll: str
-    rollNo: Optional[str] = None
+    student_id: UUID = Field(..., alias="studentId")
+    roll_no: str = Field(..., alias="rollNo")
     name: str
-    photoUrl: Optional[str] = None
+    photo_url: Optional[str] = Field(None, alias="photoUrl")
     program: Optional[str] = None
-    batch: Optional[str] = None
-    department: Optional[str] = None
-    spCode: Optional[str] = None
-    semester: Optional[int] = None
+    sp_code: Optional[str] = Field(None, alias="spCode")
+    semester: Optional[str] = None
     email: Optional[str] = None
-    dtuEmail: Optional[str] = None
-    phone: Optional[str] = None
     
     class Config:
         populate_by_name = True
@@ -58,12 +52,11 @@ class ClassResponse(BaseModel):
     id: UUID
     code: str
     name: str
-    section: Optional[str] = None
+    section: str
     teacher_type: Optional[str] = Field(None, alias="teacherType")
     ltp_pattern: Optional[str] = Field(None, alias="ltpPattern")
     practical_group: Optional[str] = Field(None, alias="practicalGroup")
-    teacher_id: Optional[int] = Field(None, alias="teacherId")
-    teacher_uuid: Optional[UUID] = Field(None, alias="teacherUuid")
+    teacher_id: UUID = Field(..., alias="teacherId")
     schedule: List[ScheduleInfo] = []
     reschedules: List[RescheduleInfo] = []
     students: List[StudentInClass] = []
@@ -77,15 +70,12 @@ class ClassResponse(BaseModel):
 
 class StudentInput(BaseModel):
     """Student input for adding to class."""
-    university_roll: str = Field(..., alias="universityRoll")
-    roll_no: Optional[str] = Field(None, alias="rollNo")
+    roll_no: str = Field(..., alias="rollNo")
     name: str
     photo_url: Optional[str] = Field(None, alias="photoUrl")
     program: Optional[str] = None
-    batch: Optional[str] = None
-    department: Optional[str] = None
     sp_code: Optional[str] = Field(None, alias="spCode")
-    semester: Optional[int] = None
+    semester: Optional[str] = None
     status: Optional[str] = None
     duration: Optional[str] = None
     email: Optional[str] = None

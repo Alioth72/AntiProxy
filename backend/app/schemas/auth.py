@@ -15,13 +15,11 @@ class GoogleLoginRequest(BaseModel):
 
 class UserInfo(BaseModel):
     """User information in authentication response."""
-    userId: int
-    uuid: UUID
+    id: UUID
     email: EmailStr
     name: str
     role: str
-    studentId: int | None = None   # int PK of student record (optional)
-    studentUuid: UUID | None = None
+    studentId: str | None = None  # UUID of student record (only for student role)
     
     class Config:
         from_attributes = True
