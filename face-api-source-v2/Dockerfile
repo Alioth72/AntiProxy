@@ -6,10 +6,13 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Install system dependencies AND build tools needed by some Python packages
+# libpq-dev is required for psycopg2 database connectivity
 RUN apt-get update && apt-get install -y \
     build-essential \
     libgl1 \
     libglib2.0-0 \
+    libpq-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements file into the container at /app
@@ -29,6 +32,13 @@ ENV FLASK_APP=app.py
 ENV FLASK_DEBUG=false
 ENV HOST=0.0.0.0
 ENV PORT=8080
+
+# Database configuration - these can be overridden at runtime
+# For Cloud Run, set CLOUD_SQL_CONNECTION_NAME and USE_CLOUD_SQL_SOCKET=true
+ENV DATABASE_NAME=dtu_aims_attendance
+ENV DATABASE_USER=postgres
+ENV EMBEDDING_STORAGE_MODE=both
+ENV USE_CLOUD_SQL_SOCKET=false
 
 # Make port 8080 available to the world outside this container
 EXPOSE 8080

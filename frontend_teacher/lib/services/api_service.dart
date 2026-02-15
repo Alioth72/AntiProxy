@@ -7,16 +7,24 @@ import 'package:path/path.dart' as p;
 import '../models/recognition_result_model.dart';
 
 class ApiService {
-  // Updated to new project face API service
+  // Updated to new project face API service (v5-migrate with PostgreSQL backend)
   final String _backendUrl =
-      "https://face-api-27dvlwurxq-el.a.run.app/recognize_faces";
+      "https://face-api-612272896050.asia-south1.run.app/recognize_faces";
 
   Future<(String processedImagePath, List<RecognitionResultModel> results)>
-      processImageForAttendance(File imageFile) async {
+      processImageForAttendance(File imageFile, {List<String>? allowedRollNumbers}) async {
     try {
       final bytes = await imageFile.readAsBytes();
       final String base64Image = base64Encode(bytes);
-      final body = jsonEncode({'image_data': base64Image});
+      
+      // Build request body with optional roll number filter
+      final Map<String, dynamic> requestBody = {'image_data': base64Image};
+      if (allowedRollNumbers != null && allowedRollNumbers.isNotEmpty) {
+        requestBody['allowed_person_ids'] = allowedRollNumbers;
+        debugPrint('Restricting recognition to ${allowedRollNumbers.length} students in class');
+      }
+      
+      final body = jsonEncode(requestBody);
 
       final response = await http.post(
         Uri.parse(_backendUrl),

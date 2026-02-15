@@ -142,7 +142,17 @@ class _FaceRecognitionAttendancePageState
     });
 
     try {
-      final result = await _apiService.processImageForAttendance(imageFile);
+      // Extract roll numbers from class roster to filter face recognition
+      final List<String> allowedRollNumbers = widget.classModel.students
+          .map((student) => student.rno)
+          .toList();
+      
+      debugPrint('Sending ${allowedRollNumbers.length} roll numbers to face-api for filtering');
+      
+      final result = await _apiService.processImageForAttendance(
+        imageFile,
+        allowedRollNumbers: allowedRollNumbers,  // Filter by class roster
+      );
       final processedImagePath = result.$1;
       final recognitionResults = result.$2;
 
@@ -197,6 +207,30 @@ class _FaceRecognitionAttendancePageState
         continue;
       }
       
+      // PRIMARY: Use personId (roll number) for direct matching
+      if (result.personId != null && result.personId!.isNotEmpty) {
+        // Direct roll number match - EXACT and RELIABLE
+        var student = widget.classModel.students.firstWhere(
+          (s) => s.rno == result.personId,
+          orElse: () => throw StateError('not found'),
+        );
+        
+        try {
+          if (!matchedRollNumbers.contains(student.rno)) {
+            debugPrint(
+                '✓ ROLL_NO MATCH: ${result.personId} -> ${student.name} (${student.rno})');
+            _studentStatuses[student.rno] = 'present';
+            matchedRollNumbers.add(student.rno);
+            matchedCount++;
+          }
+        } catch (e) {
+          debugPrint('✗ Roll no "${result.personId}" not in class roster (should not happen with filtering)');
+        }
+        continue;
+      }
+      
+      // FALLBACK: Use name-based matching for legacy data (faces enrolled without roll_no)
+      debugPrint('⚠️ No personId for "${result.name}", falling back to name matching');
       bool found = false;
       final recognizedName = result.name.toLowerCase().trim();
       
@@ -212,7 +246,7 @@ class _FaceRecognitionAttendancePageState
         final studentName = student.name.toLowerCase().trim();
         if (studentName == recognizedName) {
           debugPrint(
-              '✓ EXACT MATCH: "${result.name}" -> ${student.name} (${student.rno})');
+              '✓ EXACT NAME MATCH: "${result.name}" -> ${student.name} (${student.rno})');
           _studentStatuses[student.rno] = 'present';
           matchedRollNumbers.add(student.rno);
           matchedCount++;
@@ -232,7 +266,7 @@ class _FaceRecognitionAttendancePageState
           
           if (normalizedStudentName == normalizedRecognizedName) {
             debugPrint(
-                '✓ NORMALIZED MATCH: "${result.name}" -> ${student.name} (${student.rno})');
+                '✓ NORMALIZED NAME MATCH: "${result.name}" -> ${student.name} (${student.rno})');
             _studentStatuses[student.rno] = 'present';
             matchedRollNumbers.add(student.rno);
             matchedCount++;
@@ -260,28 +294,8 @@ class _FaceRecognitionAttendancePageState
         }
       }
 
-      // Strategy 4: Contains match (fallback for partial names)
       if (!found) {
-        for (var student in widget.classModel.students) {
-          if (matchedRollNumbers.contains(student.rno)) continue;
-          
-          final studentName = student.name.toLowerCase().trim();
-          // Check if either name contains the other (must be significant match)
-          if ((studentName.contains(recognizedName) && recognizedName.length >= 3) ||
-              (recognizedName.contains(studentName) && studentName.length >= 3)) {
-            debugPrint(
-                '✓ PARTIAL MATCH: "${result.name}" -> ${student.name} (${student.rno})');
-            _studentStatuses[student.rno] = 'present';
-            matchedRollNumbers.add(student.rno);
-            matchedCount++;
-            found = true;
-            break;
-          }
-        }
-      }
-
-      if (!found) {
-        debugPrint('✗ NO MATCH: "${result.name}" not found in class roster');
+        debugPrint('✗ NO NAME MATCH: "${result.name}" not found in class roster');
       }
     }
 

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
@@ -180,23 +181,10 @@ class StudentDataService extends ChangeNotifier {
         debugPrint('Authentication successful: ${_currentUser!['email']}');
         await loadData();
       } else if (response.statusCode == 403) {
-        // Allow login even if not registered - just show no classes
-        debugPrint('Email not registered, allowing login with no classes');
-        _jwtToken = 'guest_token'; // Placeholder token
-        _currentUser = {
-          'email': account.email,
-          'name': account.displayName ?? account.email,
-          'role': 'student',
-        };
-
-        await _secureStorage.write(key: _jwtKey, value: _jwtToken);
-        await _secureStorage.write(
-          key: _userKey,
-          value: jsonEncode(_currentUser),
-        );
-
-        debugPrint('Guest login successful: ${_currentUser!['email']}');
-        // Don't call loadData() - user will see empty classes
+        // Email not registered in student database
+        _authError = 'Your email is not registered. Please contact your administrator.';
+        debugPrint('Email not registered in student database: ${account.email}');
+        await _googleSignIn.signOut();
       } else if (response.statusCode == 401) {
         _authError = 'Authentication failed. Please try again.';
         debugPrint('Authentication failed: Invalid token');
@@ -339,20 +327,116 @@ class StudentDataService extends ChangeNotifier {
     return {'has_photo': true, 'photo_url': null};
   }
 
+  // Face API configuration
+  static const String _faceApiUrl = String.fromEnvironment(
+    'FACE_API_URL',
+    defaultValue: 'https://face-api-612272896050.asia-south1.run.app',
+  );
+
   Future<void> checkPhotoStatus() async {
-    // Photo handling disabled
-    _hasPhoto = true;
-    _photoUrl = null;
+    if (_currentUser == null) {
+      _hasPhoto = false;
+      _photoUrl = null;
+      _isCheckingPhoto = false;
+      notifyListeners();
+      return;
+    }
+
+    _isCheckingPhoto = true;
+    notifyListeners();
+
+    try {
+      // Check if the current user's face is enrolled by email (more specific) or name
+      final name = _currentUser!['name'] ?? _currentUser!['email'];
+      final email = _currentUser!['email'];
+      
+      // Use the /check_person endpoint which checks by ID (email) first, then name
+      final queryParams = <String, String>{};
+      if (email != null) {
+        queryParams['id'] = email.toString();
+      }
+      if (name != null) {
+        queryParams['name'] = name.toString();
+      }
+      
+      final uri = Uri.parse('$_faceApiUrl/check_person').replace(queryParameters: queryParams);
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        _hasPhoto = data['enrolled'] == true;
+        debugPrint('Photo status check: hasPhoto=$_hasPhoto for $name (email: $email)');
+      } else {
+        _hasPhoto = false;
+      }
+    } catch (e) {
+      debugPrint('Error checking photo status: $e');
+      _hasPhoto = false;
+    }
+
     _isCheckingPhoto = false;
     notifyListeners();
   }
 
   Future<String> uploadPhoto(String imagePath) async {
-    // Photo upload disabled; simulate success
-    _hasPhoto = true;
-    _photoUrl = null;
-    notifyListeners();
-    return '';
+    if (_currentUser == null) {
+      throw Exception('No user logged in');
+    }
+
+    final name = _currentUser!['name'] ?? _currentUser!['email'];
+    final email = _currentUser!['email'];
+    final rollNo = _currentUser!['rollNo'];  // Get roll number from user data
+    
+    if (name == null || name.toString().isEmpty) {
+      throw Exception('User name not available');
+    }
+    
+    if (rollNo == null || rollNo.toString().isEmpty) {
+      throw Exception('Roll number not available. Please re-login.');
+    }
+
+    try {
+      debugPrint('Uploading face enrollment for: $name (roll: $rollNo)');
+
+      // Use multipart form data (the endpoint expects file upload)
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_faceApiUrl/add_person'),
+      );
+
+      // Add the image file
+      request.files.add(await http.MultipartFile.fromPath(
+        'image',  // This is the field name the API expects
+        imagePath,
+      ));
+
+      // Add form fields - use roll number as unique identifier
+      request.fields['name'] = name.toString();
+      request.fields['id'] = rollNo.toString();  // Use roll_no as unique ID for face recognition
+      request.fields['update'] = 'true';  // Update if already exists
+
+      // Send the request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      debugPrint('Face API response: ${response.statusCode}');
+      debugPrint('Face API body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        _hasPhoto = true;
+        _photoUrl = null; // Face API doesn't return photo URL
+        notifyListeners();
+        debugPrint('Face enrollment successful: ${data['message']}');
+        return data['message'] ?? 'Photo uploaded successfully';
+      } else {
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData['message'] ?? errorData['error'] ?? 'Failed to upload photo');
+      }
+    } catch (e) {
+      debugPrint('Error uploading photo: $e');
+      rethrow;
+    }
   }
 
   // --- BT sidecar ---

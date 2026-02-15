@@ -189,7 +189,48 @@ class ProfilePage extends StatelessWidget {
               ),
             ),
 
-            // Update Photo Button
+            // Upload Photo Button (when no photo)
+            if (!dataService.hasPhoto)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.add_a_photo),
+                    label: const Text('Upload Photo for Face Recognition'),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const PhotoCapturePage(),
+                        ),
+                      ).then((uploaded) {
+                        if (uploaded == true) {
+                          dataService.checkPhotoStatus();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Photo uploaded successfully! Your face is now enrolled for attendance.'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 12),
+
+            // Update Photo Button (when photo exists)
             if (dataService.hasPhoto)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),

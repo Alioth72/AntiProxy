@@ -24,6 +24,20 @@ class Config:
     HOST = os.environ.get('HOST', '0.0.0.0')
     PORT = int(os.environ.get('PORT', 8080))
     
+    # Database configuration for embedding storage
+    DATABASE_HOST = os.environ.get('DATABASE_HOST', 'localhost')
+    DATABASE_PORT = int(os.environ.get('DATABASE_PORT', 5432))
+    DATABASE_NAME = os.environ.get('DATABASE_NAME', 'dtu_aims_attendance')
+    DATABASE_USER = os.environ.get('DATABASE_USER', 'postgres')
+    DATABASE_PASSWORD = os.environ.get('DATABASE_PASSWORD', '')
+    
+    # Cloud SQL configuration for Cloud Run
+    CLOUD_SQL_CONNECTION_NAME = os.environ.get('CLOUD_SQL_CONNECTION_NAME', '')  # e.g., project:region:instance
+    USE_CLOUD_SQL_SOCKET = os.environ.get('USE_CLOUD_SQL_SOCKET', 'false').lower() == 'true'
+    
+    # Embedding storage mode: 'database', 'json', or 'both' (database primary with JSON fallback)
+    EMBEDDING_STORAGE_MODE = os.environ.get('EMBEDDING_STORAGE_MODE', 'both')
+    
     # Logging configuration
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
     

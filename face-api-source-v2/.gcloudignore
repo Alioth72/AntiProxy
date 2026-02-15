@@ -1,0 +1,43 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Model files (downloaded at runtime)
+models/
+*.onnx
+*.pb
+
+# Test images and uploads
+images/
+uploads/
+bin-tere/
+api_results_*/
+reference_database_*/
+logs/
+
+# Development files
+.git/
+.gitignore
+README.md
+test_*.py
+*.md
+
+# VS Code
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Large data files
+*.zip
+*.tar.gz
+*.json.backup
+reference_database.json.backup*

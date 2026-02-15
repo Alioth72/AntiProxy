@@ -1,0 +1,594 @@
+================================================================================
+                    ANTIPROXY SYSTEM ARCHITECTURE ANALYSIS
+                         Database Schema & Data Flow
+                           Generated: Feb 14, 2026
+================================================================================
+
+================================================================================
+1. STUDENT REGISTRATION & PRIMARY KEYS
+================================================================================
+
+STUDENTS TABLE (students)
+-------------------------
+Primary Key: id (UUID, auto-generated)
+    - Type: UUID (PostgreSQL UUID type)
+    - Generation: uuid.uuid4() on creation
+    - Example: "550e8400-e29b-41d4-a716-446655440000"
+
+Unique Constraints:
+    - roll_no (TEXT, unique, indexed)
+    
+Other Columns:
+    - name (TEXT, not null)
+    - email (TEXT, nullable)
+    - dtu_email (TEXT, nullable)
+    - photo_url (TEXT, nullable)
+    - program, sp_code, semester, status, duration, phone (TEXT, nullable)
+    - created_at (TIMESTAMP with timezone)
+
+Authentication:
+    - Students login using Google OAuth
+    - Backend validates email against students.email OR students.dtu_email
+    - If match found, JWT token issued with student role
+    - Guest login DISABLED (as of Feb 14, 2026)
+
+Location: /AntiProxy-SIH/backend/app/models/student.py (lines 1-37)
+Auth Route: /AntiProxy-SIH/backend/app/routes/auth_routes.py (lines 86-154)
+
+================================================================================
+2. ALL DATABASE TABLES & PRIMARY KEYS
+================================================================================
+
+TABLE: students
+--------------
+Primary Key: id (UUID)
+Unique Index: roll_no
+Foreign Key Relations: 
+    - Referenced by: class_students.student_id
+    - Referenced by: attendance_statuses.student_id
+
+TABLE: users
+-----------
+Primary Key: id (UUID)
+Unique Index: email
+Description: Teachers, admins, and students who login to the system
+Columns: email, name, role (ENUM: teacher/admin/student), department, 
+         employee_id, last_login_at, created_at
+Foreign Key Relations:
+    - Referenced by: classes.teacher_id
+    - Referenced by: attendance_sessions.teacher_id
+
+TABLE: allowed_emails
+--------------------
+Primary Key: id (UUID)
+Unique Index: email
+Description: Whitelist for teacher/admin email access
+Columns: email, name, role (ENUM), created_at
+
+TABLE: classes
+-------------
+Primary Key: id (UUID)
+Unique Constraint: (teacher_id, code, section)
+Columns: code, name, section, ltp_pattern, teacher_type, practical_group,
+         teacher_id (FK -> users.id), created_at, updated_at
+Foreign Key Relations:
+    - References: users.id (teacher_id)
+    - Referenced by: class_schedules.class_id
+    - Referenced by: class_reschedules.class_id
+    - Referenced by: class_students.class_id
+    - Referenced by: attendance_sessions.class_id
+
+TABLE: class_schedules
+---------------------
+Primary Key: id (BIGINT, auto-increment)
+Unique Constraint: (class_id, day_of_week)
+Columns: class_id (FK -> classes.id), day_of_week (SMALLINT 1-7),
+         start_time (TIME), end_time (TIME)
+Foreign Key Relations:
+    - References: classes.id (CASCADE delete)
+
+TABLE: class_reschedules
+-----------------------
+Primary Key: id (BIGINT, auto-increment)
+Columns: class_id (FK -> classes.id), original_date, original_start_time,
+         original_end_time, rescheduled_date, rescheduled_start_time,
+         rescheduled_end_time, reason, created_at
+Foreign Key Relations:
+    - References: classes.id (CASCADE delete)
+
+TABLE: class_students (MANY-TO-MANY JUNCTION)
+--------------------------------------------
+Primary Key: (class_id, student_id) - Composite
+Columns: class_id (FK -> classes.id), student_id (FK -> students.id),
+         added_at
+Foreign Key Relations:
+    - References: classes.id (CASCADE delete)
+    - References: students.id
+
+TABLE: attendance_sessions
+--------------------------
+Primary Key: id (UUID)
+Unique Constraint: (class_id, session_date)
+Columns: class_id (FK -> classes.id), teacher_id (FK -> users.id),
+         session_date (DATE), processed_image_url, created_at
+Foreign Key Relations:
+    - References: classes.id (CASCADE delete)
+    - References: users.id (RESTRICT delete)
+    - Referenced by: attendance_statuses.session_id
+
+TABLE: attendance_statuses (PER-STUDENT STATUS)
+----------------------------------------------
+Primary Key: (session_id, student_id) - Composite
+Columns: session_id (FK -> attendance_sessions.id),
+         student_id (FK -> students.id),
+         status (ENUM: present/absent/late/excused),
+         recognized_by_ai (BOOLEAN, default false),
+         similarity_score (NUMERIC 5,2)
+Foreign Key Relations:
+    - References: attendance_sessions.id (CASCADE delete)
+    - References: students.id
+
+TABLE: face_embeddings (Face Recognition Database)
+-------------------------------------------------
+Primary Key: id (BIGINT, auto-increment)
+Unique Index: person_name
+Columns: person_name (TEXT, unique, not null),
+         person_id (TEXT, nullable) - stores roll_no or email
+         embedding (REAL[], 512-dimensional array),
+         created_at, updated_at
+Description: Stores face embeddings for recognition
+    - person_name: Student's name from DB
+    - person_id: External identifier (roll_no, email, etc.)
+    - embedding: 512-dim ArcFace embedding vector
+
+Location: Cloud SQL PostgreSQL (dtu_aims_attendance database)
+    Used by: face-api-service for face recognition
+
+================================================================================
+3. DATA FETCHING ROUTES & FLOW
+================================================================================
+
+STUDENT DATA RETRIEVAL
+---------------------
+
+Route: GET /students/me/classes
+Location: /backend/app/routes/student_routes.py (lines 40-120)
+Authentication: Requires JWT with student role
+Flow:
+    1. Extract student email from JWT token
+    2. Query Student table by email OR dtu_email
+    3. If not found, return 404
+    4. Query classes via class_students join:
+       SELECT c.* FROM classes c
+       JOIN class_students cs ON c.id = cs.class_id
+       WHERE cs.student_id = :student_id
+    5. For each class, fetch schedules from class_schedules
+    6. Return list of classes with teacher info and schedules
+
+Route: GET /students/me/attendance
+Location: /backend/app/routes/student_routes.py (lines 122-200)
+Authentication: Requires JWT with student role
+Flow:
+    1. Find student by email
+    2. Query attendance records:
+       SELECT a.*, c.name, c.code FROM attendance_statuses a
+       JOIN attendance_sessions s ON a.session_id = s.id
+       JOIN classes c ON s.class_id = c.id
+       WHERE a.student_id = :student_id
+       ORDER BY s.session_date DESC
+    3. Return attendance history with class info
+
+TEACHER/ADMIN DATA RETRIEVAL
+----------------------------
+
+Route: GET /classes
+Location: /backend/app/routes/class_routes.py (lines 98-109)
+Authentication: Requires JWT with teacher or admin role
+Flow:
+    - Admin: Returns ALL classes in database
+    - Teacher: Returns only classes where teacher_id = current_user.id
+
+Route: GET /classes/{class_id}/students
+Location: /backend/app/routes/stats_routes.py (lines 19-100)
+Authentication: Requires JWT with teacher or admin role
+Flow:
+    1. Verify class exists
+    2. Verify permission (teacher owns class OR user is admin)
+    3. Query student roster:
+       SELECT s.* FROM students s
+       JOIN class_students cs ON s.id = cs.student_id
+       WHERE cs.class_id = :class_id
+    4. Query attendance stats for each student
+    5. Return list with attendance summaries
+
+Route: POST /classes/{class_id}/students/upload-csv
+Location: /backend/app/routes/class_routes.py (lines 136-200)
+Authentication: Requires JWT with teacher or admin role
+Flow:
+    1. Parse CSV file (columns: name, rollno, email, dtu_email, etc.)
+    2. For each row:
+       a. Check if student exists by roll_no
+       b. If exists: update name, email, dtu_email
+       c. If not exists: create new student record
+    3. Link students to class via class_students table
+    4. Return summary (added, updated, linked counts)
+
+Route: POST /attendance/sessions
+Location: /backend/app/routes/attendance_routes.py (lines 20-50)
+Authentication: Requires JWT with teacher or admin role
+Flow:
+    1. Create AttendanceSession record (class_id, session_date, teacher_id)
+    2. Return session ID for status updates
+
+Route: PUT /attendance/sessions/{session_id}/statuses
+Location: /backend/app/routes/attendance_routes.py (lines 53-77)
+Authentication: Requires JWT with teacher or admin role
+Payload: List of {studentId, status, recognizedByAi, similarityScore}
+Flow:
+    1. Verify session exists and user has permission
+    2. For each status update:
+       a. Find student by ID
+       b. Upsert attendance_statuses record (session_id, student_id)
+    3. Return success
+
+================================================================================
+4. STUDENT IMAGE UPLOAD FLOW
+================================================================================
+
+CURRENT IMPLEMENTATION (NAME-BASED)
+-----------------------------------
+
+Student App Upload:
+Location: /frontend_student/lib/services/student_data_service.dart
+         (lines 385-438)
+
+Flow:
+    1. Student captures photo from camera
+    2. App sends multipart/form-data to face-api /add_person endpoint:
+       - Field: image (file)
+       - Field: name (student.name from DB)
+       - Field: id (student.email)
+       - Field: update = "true"
+    3. Face-API processes:
+       a. Detect face in image
+       b. Align face using landmarks
+       c. Extract 512-dim embedding using ArcFace
+       d. Store in face_embeddings table:
+          - person_name = name field (student's name)
+          - person_id = id field (student's email)
+          - embedding = 512-dim vector
+    4. Return success/failure to student app
+
+Face-API Endpoint: POST /add_person
+Location: /face-api-source-v2/app.py (lines 587-710)
+Database Storage: /face-api-source-v2/embedding_store.py (lines 100-170)
+
+STORAGE DETAILS
+---------------
+
+Face embeddings are stored in PostgreSQL:
+    Table: face_embeddings
+    Fields:
+        - id (BIGINT, primary key)
+        - person_name (TEXT, unique) - Student's full name
+        - person_id (TEXT, nullable) - Email or roll_no
+        - embedding (REAL[]) - 512-dimensional vector
+        - created_at, updated_at (TIMESTAMP)
+
+Matching Strategy:
+    - Person uniqueness determined by person_name field
+    - person_id is stored but NOT USED for matching
+    - When student uploads new photo, existing person_name is updated
+
+ISSUE: Name-based storage means:
+    - Multiple students with same name cause conflicts
+    - Names with typos won't match DB names
+    - No direct link between face and roll_no
+
+================================================================================
+5. FACE RECOGNITION & ATTENDANCE MARKING
+================================================================================
+
+CURRENT IMPLEMENTATION (NAME-BASED MATCHING)
+-------------------------------------------
+
+Teacher App Flow:
+Location: /frontend_teacher/lib/ui/classes/face_recognition_attendance_page.dart
+         (lines 180-300)
+
+Step 1: Send Image to Face-API
+    Endpoint: POST /recognize_faces
+    Payload: {"image_data": "base64_encoded_image"}
+    
+Step 2: Face-API Processing
+    Location: /face-api-source-v2/app.py (lines 316-450)
+    Process:
+        a. Decode base64 image
+        b. Detect all faces in image
+        c. For each detected face:
+           - Align face using landmarks
+           - Extract 512-dim embedding
+           - Find best match in face_embeddings table using cosine similarity
+           - Calculate similarity score (0.0 to 1.0)
+        d. Return JSON response:
+           {
+               "results": [
+                   {
+                       "boundingBox": {"left": x, "top": y, "width": w, "height": h},
+                       "name": "Student Name",
+                       "similarityScore": 0.85
+                   },
+                   ...
+               ],
+               "annotatedImageBase64": "..."
+           }
+
+Step 3: Teacher App Matching Logic (NAME-BASED)
+    Location: /frontend_teacher/lib/ui/classes/face_recognition_attendance_page.dart
+             (lines 191-290)
+    
+    For each recognition result:
+        1. Check if similarity_score >= threshold (default 0.72)
+        2. If above threshold, try matching strategies in order:
+           
+           Strategy 1: EXACT MATCH
+               Compare result.name (lowercase) == student.name (lowercase)
+               Example: "shubhank gupta" matches "Shubhank Gupta"
+           
+           Strategy 2: NORMALIZED MATCH
+               Remove special chars, normalize spaces
+               Example: "Shubhank  Gupta!" matches "Shubhank Gupta"
+           
+           Strategy 3: FIRST NAME MATCH
+               If recognized name is single word, match first name only
+               Example: "Shubhank" matches "Shubhank Gupta"
+           
+           Strategy 4: PARTIAL MATCH (CONTAINS)
+               Either name contains the other (min 3 chars)
+               Example: "Shubhank" matches "Gupta Shubhank"
+        
+        3. First match wins - mark student as PRESENT
+        4. Store in _studentStatuses[student.rno] = 'present'
+        5. Track matchedRollNumbers to prevent duplicates
+
+Step 4: Submit Attendance to Backend
+    - Teacher reviews marked attendance
+    - Clicks "Submit Attendance"
+    - App sends to: PUT /attendance/sessions/{session_id}/statuses
+    - Payload includes: studentId (UUID), status, recognizedByAi (bool), 
+                       similarityScore (float)
+
+PROBLEM WITH CURRENT APPROACH
+-----------------------------
+
+Face-API Response:
+    {
+        "name": "Shubhank Gupta",    <- ONLY NAME, NO ROLL_NO
+        "similarityScore": 0.85
+    }
+
+Teacher App Matching:
+    - Loops through class roster (list of Student objects)
+    - Each Student has: {id, name, rno, email, ...}
+    - Compares result.name with student.name
+    - If match, marks student.rno as present
+
+Issues:
+    1. Name variations cause mismatches:
+       - DB: "Shubhank Gupta"
+       - Face-API: "Shubhank" (incomplete enrollment)
+       - Face-API: "SHUBHANK GUPTA" (case mismatch)
+    
+    2. Multiple students with similar names:
+       - "Aman Kumar" and "Aman Singh" -> confusion
+       - "Priya" alone matches both "Priya Sharma" and "Priya Gupta"
+    
+    3. No direct identifier:
+       - Face-API stores person_id (roll_no) but doesn't return it
+       - Matching relies on fuzzy name comparison
+       - No guarantee of correct student
+
+================================================================================
+6. PROPOSED SOLUTION: ROLL_NO-BASED MATCHING
+================================================================================
+
+REQUIRED CHANGES
+---------------
+
+CHANGE 1: Face-API Response - Include person_id
+Location: /face-api-source-v2/app.py (lines 316-450)
+
+Current Code (line ~390):
+    face_result = {
+        "boundingBox": {...},
+        "name": person_name if person_name else "Unknown",
+        "similarityScore": float(similarity_score)
+    }
+
+Proposed Change:
+    # Modify find_best_match to return person data
+    person_data = embedding_store.find_best_match_with_id(embedding)
+    
+    face_result = {
+        "boundingBox": {...},
+        "name": person_data["name"] if person_data else "Unknown",
+        "personId": person_data["person_id"] if person_data else None,
+        "similarityScore": person_data["similarity"] if person_data else 0.0
+    }
+
+CHANGE 2: Embedding Store - Return person_id in match
+Location: /face-api-source-v2/embedding_store.py (lines 297-340)
+
+Current Code:
+    def find_best_match(self, embedding, similarity_threshold=0.0):
+        # ... matching logic ...
+        return best_match, best_similarity  # Returns name only
+
+Proposed New Method:
+    def find_best_match_with_id(self, embedding, similarity_threshold=0.0):
+        """
+        Find best match and return complete person data.
+        
+        Returns:
+            dict: {
+                "name": person_name,
+                "person_id": person_id,
+                "similarity": similarity_score
+            } or None
+        """
+        best_match = None
+        best_similarity = -1.0
+        best_person_id = None
+        
+        emb_array = np.array(embedding)
+        
+        with self._lock:
+            for person_name, person_data in self._cache.items():
+                ref_embedding = np.array(person_data['embedding'])
+                similarity = self._cosine_similarity(emb_array, ref_embedding)
+                
+                if similarity > best_similarity:
+                    best_similarity = similarity
+                    best_match = person_name
+                    best_person_id = person_data.get('person_id')
+        
+        if best_similarity > similarity_threshold:
+            return {
+                "name": best_match,
+                "person_id": best_person_id,
+                "similarity": best_similarity
+            }
+        else:
+            return None
+
+CHANGE 3: Teacher App - Match by roll_no instead of name
+Location: /frontend_teacher/lib/ui/classes/face_recognition_attendance_page.dart
+         (lines 191-290)
+
+Current Code:
+    for (var result in _recognitionResults) {
+        final recognizedName = result.name.toLowerCase().trim();
+        
+        // Try multiple name matching strategies...
+        for (var student in widget.classModel.students) {
+            if (studentName == recognizedName) {
+                _studentStatuses[student.rno] = 'present';
+                break;
+            }
+        }
+    }
+
+Proposed Change:
+    for (var result in _recognitionResults) {
+        // Check similarity threshold
+        if (result.similarityScore < _similarityThreshold) continue;
+        
+        String? recognizedRollNo = result.personId;  // NEW: Get roll_no from response
+        
+        if (recognizedRollNo == null || recognizedRollNo.isEmpty) {
+            // Fallback to name matching if no roll_no provided
+            debugPrint('⚠️ No roll_no for "${result.name}", using name match');
+            _matchByName(result);
+            continue;
+        }
+        
+        // Direct roll_no match - EXACT and RELIABLE
+        var student = widget.classModel.students.firstWhere(
+            (s) => s.rno == recognizedRollNo,
+            orElse: () => null
+        );
+        
+        if (student != null) {
+            debugPrint('✓ ROLL_NO MATCH: ${result.personId} -> ${student.name}');
+            _studentStatuses[student.rno] = 'present';
+            matchedRollNumbers.add(student.rno);
+            matchedCount++;
+        } else {
+            debugPrint('✗ Roll no "${recognizedRollNo}" not in class roster');
+        }
+    }
+
+CHANGE 4: Student App - Upload with roll_no as person_id
+Location: /frontend_student/lib/services/student_data_service.dart
+         (lines 385-438)
+
+Current Code:
+    request.fields['name'] = name.toString();
+    request.fields['id'] = email.toString();  // Uses email as ID
+
+Proposed Change:
+    request.fields['name'] = name.toString();
+    request.fields['id'] = rollNo.toString();  // Use roll_no as ID
+    
+    // OR include both:
+    request.fields['name'] = '$name ($rollNo)';  // Include roll_no in name
+    request.fields['id'] = rollNo.toString();
+
+BENEFITS OF ROLL_NO MATCHING
+----------------------------
+
+1. EXACT IDENTIFICATION
+   - Roll numbers are unique (students.roll_no has UNIQUE constraint)
+   - No ambiguity with similar names
+   - Direct mapping: face -> roll_no -> student record
+
+2. ELIMINATES NAME MATCHING ERRORS
+   - No more fuzzy string matching
+   - No case sensitivity issues
+   - No partial name confusion
+
+3. HANDLES NAME CHANGES
+   - If student changes name in DB, face remains linked to roll_no
+   - No need to re-upload photos after name corrections
+
+4. FASTER MATCHING
+   - O(1) lookup by roll_no instead of O(n) name comparison
+   - No need for multiple fallback strategies
+
+5. BETTER AUDIT TRAIL
+   - Clear link: face embedding -> roll_no -> student UUID
+   - Can verify: "Which roll_no was recognized at timestamp X?"
+
+================================================================================
+7. IMPLEMENTATION CHECKLIST
+================================================================================
+
+[ ] 1. Update embedding_store.py:
+       - Add find_best_match_with_id() method
+       - Ensure person_id is populated when students upload
+
+[ ] 2. Update face-api app.py:
+       - Modify recognize_faces endpoint to use find_best_match_with_id()
+       - Add personId field to JSON response
+
+[ ] 3. Deploy updated face-api:
+       - Build Docker image
+       - Deploy to Cloud Run
+       - Test /recognize_faces response format
+
+[ ] 4. Update teacher app model:
+       - Add personId field to RecognitionResult class
+       - Update JSON parsing in api_service.dart
+
+[ ] 5. Update teacher app matching logic:
+       - Replace name-based matching with roll_no matching
+       - Keep name matching as fallback for legacy data
+
+[ ] 6. Update student app upload:
+       - Change person_id from email to roll_no
+       - Ensure roll_no is available in student profile
+
+[ ] 7. Data migration (if needed):
+       - Check existing face_embeddings.person_id values
+       - If using emails, map to roll_nos via students table
+       - Update face_embeddings.person_id to roll_no format
+
+[ ] 8. Testing:
+       - Test photo upload with roll_no
+       - Test face recognition returns personId
+       - Test attendance marking with roll_no match
+       - Verify fallback to name matching works
+
+================================================================================
+END OF DOCUMENT
+================================================================================

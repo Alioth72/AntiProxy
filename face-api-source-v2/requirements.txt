@@ -5,3 +5,8 @@ opencv-python-headless
 numpy
 insightface
 onnxruntime
+
+# Database support for dynamic enrollment
+sqlalchemy>=2.0.0
+psycopg2-binary
+cloud-sql-python-connector[pg8000]

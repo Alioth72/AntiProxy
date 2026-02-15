@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 class RecognitionResultModel {
   final Rect boundingBox;
   final String name;
+  final String? personId;  // Roll number from face recognition
   final double similarityScore;
 
   RecognitionResultModel({
     required this.boundingBox,
     required this.name,
+    this.personId,  // Optional for backward compatibility
     required this.similarityScore,
   });
 
@@ -23,6 +25,7 @@ class RecognitionResultModel {
         box['height'].toDouble(),
       ),
       name: json['name'],
+      personId: json['personId'] as String?,  // Can be null for unknown faces
       similarityScore: json['similarityScore'].toDouble(),
     );
   }
@@ -37,6 +40,7 @@ class RecognitionResultModel {
         'height': boundingBox.height,
       },
       'name': name,
+      'personId': personId,
       'similarityScore': similarityScore,
     };
   }

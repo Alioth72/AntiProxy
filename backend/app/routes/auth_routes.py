@@ -141,13 +141,14 @@ async def google_login_student(request: GoogleLoginRequest, db: Session = Depend
     # Generate JWT with student role
     token = create_jwt(user.id, user.email, user.role.value)
     
-    # Prepare response with student ID included
+    # Prepare response with student ID and roll number included
     user_info = UserInfo(
         id=user.id,
         email=user.email,
         name=user.name,
         role=user.role.value,
-        studentId=str(student.id)  # Include student ID for frontend
+        studentId=str(student.id),  # Include student ID for frontend
+        rollNo=student.roll_no  # Include roll number for face recognition
     )
     
     return TokenResponse(token=token, user=user_info)

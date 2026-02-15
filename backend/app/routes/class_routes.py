@@ -1,7 +1,7 @@
 """
 Class management routes.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
@@ -131,3 +131,131 @@ async def update_students(
     )
     
     return {"students": students}
+
+
+@router.post("/{class_id}/students/upload-csv")
+async def upload_students_csv(
+    class_id: UUID,
+    file: UploadFile = File(...),
+    current_user: UserContext = Depends(require_teacher_or_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Upload a CSV file containing student information to add to a class.
+    
+    CSV format:
+    - Required columns: roll_no, name
+    - Optional columns: email, dtu_email, phone, program, semester, sp_code, status, duration
+    
+    Students will be created/updated in the database and enrolled in the class.
+    Students with email addresses can then login to the student app.
+    """
+    import csv
+    import io
+    
+    # Validate file type
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be a CSV file"
+        )
+    
+    # Read and parse CSV
+    try:
+        contents = await file.read()
+        decoded = contents.decode('utf-8')
+        reader = csv.DictReader(io.StringIO(decoded))
+        
+        # Normalize column names (lowercase, replace spaces with underscores)
+        def normalize_column(col):
+            return col.lower().strip().replace(' ', '_').replace('-', '_')
+        
+        students_data = []
+        row_number = 1
+        errors = []
+        
+        for row in reader:
+            row_number += 1
+            # Normalize keys
+            normalized_row = {normalize_column(k): v.strip() if v else None for k, v in row.items()}
+            
+            # Map common column name variations
+            roll_no = (
+                normalized_row.get('roll_no') or 
+                normalized_row.get('rollno') or 
+                normalized_row.get('roll_number') or 
+                normalized_row.get('enrollment_no') or
+                normalized_row.get('enrollment')
+            )
+            name = (
+                normalized_row.get('name') or 
+                normalized_row.get('student_name') or 
+                normalized_row.get('full_name')
+            )
+            email = (
+                normalized_row.get('email') or 
+                normalized_row.get('personal_email') or
+                normalized_row.get('student_email')
+            )
+            dtu_email = (
+                normalized_row.get('dtu_email') or 
+                normalized_row.get('dtuemail') or
+                normalized_row.get('institutional_email') or
+                normalized_row.get('college_email')
+            )
+            
+            # Validate required fields
+            if not roll_no:
+                errors.append(f"Row {row_number}: Missing roll_no")
+                continue
+            if not name:
+                errors.append(f"Row {row_number}: Missing name")
+                continue
+            
+            from app.schemas.classes import StudentInput
+            student_input = StudentInput(
+                roll_no=roll_no,
+                name=name,
+                email=email,
+                dtu_email=dtu_email,
+                phone=normalized_row.get('phone') or normalized_row.get('mobile'),
+                program=normalized_row.get('program') or normalized_row.get('course'),
+                semester=normalized_row.get('semester') or normalized_row.get('sem'),
+                sp_code=normalized_row.get('sp_code') or normalized_row.get('spcode'),
+                status=normalized_row.get('status'),
+                duration=normalized_row.get('duration')
+            )
+            students_data.append(student_input)
+        
+        if not students_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"No valid students found in CSV. Errors: {errors}" if errors else "No students found in CSV"
+            )
+        
+        # Use existing service to add students
+        students = update_class_students(
+            db,
+            class_id,
+            current_user.user_id,
+            current_user.role,
+            students_data
+        )
+        
+        return {
+            "message": f"Successfully processed {len(students_data)} students",
+            "students_added": len(students_data),
+            "errors": errors if errors else None,
+            "students": students
+        }
+        
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not decode CSV file. Please ensure it is UTF-8 encoded."
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing CSV: {str(e)}"
+        )

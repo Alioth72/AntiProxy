@@ -20,6 +20,7 @@ class UserInfo(BaseModel):
     name: str
     role: str
     studentId: str | None = None  # UUID of student record (only for student role)
+    rollNo: str | None = None  # Roll number (only for student role)
     
     class Config:
         from_attributes = True

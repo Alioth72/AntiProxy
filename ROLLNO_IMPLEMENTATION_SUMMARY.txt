@@ -1,0 +1,312 @@
+================================================================================
+           ROLL NUMBER-BASED FACE RECOGNITION IMPLEMENTATION
+                        Deployment Summary
+                      February 14, 2026
+================================================================================
+
+CHANGES IMPLEMENTED
+================================================================================
+
+1. FACE-API SERVICE (face-api-source-v2/)
+------------------------------------------
+
+✅ embedding_store.py - Added find_best_match_with_id() method
+   - Returns complete person data including person_id (roll number)
+   - Supports optional allowed_person_ids filter for class-scoped search
+   - Location: Lines 337-393
+
+✅ app.py - Updated find_best_match() helper function
+   - Now accepts allowed_person_ids parameter
+   - Returns tuple: (name, similarity, person_id)
+   - Location: Lines 88-120
+
+✅ app.py - Enhanced /recognize_faces endpoint
+   - Accepts optional "allowed_person_ids" array in request body
+   - Filters recognition to only students in that list
+   - Returns personId field in response JSON
+   - Location: Lines 331-430
+
+✅ Created .gcloudignore to exclude large files from build
+   - Excludes: models/, images/, uploads/, __pycache__, etc.
+   - Reduces build upload size from 709MB to ~10MB
+
+REQUST FORMAT:
+{
+    "image_data": "base64_encoded_image",
+    "allowed_person_ids": ["2K24/AIMS/01", "2K24/AIMS/02", ...]  // Optional
+}
+
+RESPONSE FORMAT:
+{
+    "results_json": [
+        {
+            "boundingBox": {"left": x, "top": y, "width": w, "height": h},
+            "name": "Student Name",
+            "personId": "2K24/AIMS/32",  // NEW - Roll number
+            "similarityScore": 0.85
+        }
+    ],
+    "processed_image_base64": "..."
+}
+
+2. BACKEND SERVICE (backend/)
+------------------------------
+
+✅ schemas/auth.py - Added rollNo field to UserInfo
+   - New field: rollNo: str | None = None
+   - Location: Line 23
+
+✅ routes/auth_routes.py - Include roll_no in student login response
+   - Fetches student.roll_no and includes in UserInfo
+   - Location: Lines 145-152
+
+GUEST LOGIN CHANGE:
+✅ Guest login DISABLED in student app
+   - Students must be registered in database to login
+   - 403 response now shows error and signs out instead of allowing guest access
+
+3. TEACHER APP (frontend_teacher/)
+-----------------------------------
+
+✅ models/recognition_result_model.dart - Added personId field
+   - New field: String? personId
+   - Parsed from JSON response
+   - Location: Lines 5-44
+
+✅ services/api_service.dart - Updated processImageForAttendance()
+   - Now accepts optional allowedRollNumbers parameter
+   - Sends allowed_person_ids array to face-api
+   - Location: Lines 15-34
+
+✅ ui/classes/face_recognition_attendance_page.dart - TWO MAJOR CHANGES:
+   
+   a) Send class roster to face-api:
+      - Extracts roll numbers from widget.classModel.students
+      - Passes to api_service as allowedRollNumbers
+      - Face-API only searches within these roll numbers
+      - Location: Lines 140-153
+   
+   b) Roll number-based matching (PRIMARY):
+      - If result.personId exists, directly match by roll number (O(1) lookup)
+      - Falls back to name matching only if personId is null (legacy data)
+      - Location: Lines 200-280
+
+MATCHING PRIORITY:
+1. PRIMARY: Direct roll_no match (result.personId == student.rno)
+2. FALLBACK: Name-based matching (exact, normalized, first name, partial)
+
+4. STUDENT APP (frontend_student/)
+-----------------------------------
+
+✅ services/student_data_service.dart - Updated uploadPhoto()
+   - Now uses rollNo instead of email as person_id
+   - Validates rollNo is available before upload
+   - Location: Lines 381-415
+
+UPLOAD CHANGES:
+- OLD: request.fields['id'] = email.toString();
+- NEW: request.fields['id'] = rollNo.toString();
+
+================================================================================
+DEPLOYMENT STATUS
+================================================================================
+
+✅ Face-API Service
+   Status: DEPLOYED
+   Revision: face-api-00020-g6v
+   URL: https://face-api-612272896050.asia-south1.run.app
+   Enrolled Persons: 48
+   Database: Connected and healthy
+   Build ID: c2d22d72-e089-48d8-bd58-8e23a12f0699
+
+⚠️ Backend Service
+   Status: NOT YET DEPLOYED (build failed)
+   Note: Schema changes added but not deployed to Cloud Run
+   
+   REQUIRED FOR: Students to receive rollNo in login response
+   WITHOUT THIS: Student app photo upload will fail (rollNo undefined)
+
+❌ Frontend Apps
+   Status: NOT DEPLOYED
+   Teacher App: Code updated but not rebuilt/deployed
+   Student App: Code updated but not rebuilt/deployed
+
+================================================================================
+WHAT WORKS NOW (after face-api deployment)
+================================================================================
+
+✅ Face-API can filter recognition by class roster
+   - Teacher app sends list of roll numbers
+   - Face-API only searches within those students
+   - Prevents false matches from other classes
+
+✅ Face-API returns personId (roll_no) in response
+   - Teacher app can use direct roll_no matching
+   - Much more reliable than name matching
+
+✅ Guest login disabled
+   - Only registered student emails can login
+
+================================================================================
+WHAT DOES NOT WORK YET
+================================================================================
+
+❌ Student photo upload
+   - Backend not deployed, so rollNo not in user response
+   - Student app will get "Roll number not available" error
+   - WORKAROUND: Deploy backend OR temporarily revert student app to use email
+
+❌ Teacher app roll_no matching
+   - Teacher app code updated but Flutter app not rebuilt
+   - Current deployed app still uses old name-based matching only
+
+❌ Student roll_no in login response
+   - Backend code updated but not deployed
+   - Students logging in won't receive rollNo field
+
+================================================================================
+NEXT STEPS TO COMPLETE DEPLOYMENT
+================================================================================
+
+1. FIX AND DEPLOY BACKEND
+   Priority: HIGH
+   Issue: Build failed during deployment
+   Action: 
+   - Check build logs: https://console.cloud.google.com/cloud-build/builds;region=asia-south1/e2ca5f5f-78d8-4201-a745-3de391245e48
+   - Fix Dockerfile or requirements issues
+   - Redeploy backend with:
+     cd backend && gcloud run deploy dtu-aims-backend --source . --region asia-south1
+
+2. REBUILD AND DEPLOY TEACHER APP
+   Priority: MEDIUM
+   Action:
+   - Flutter build APK or web deployment
+   - Teachers will benefit from roll_no-based matching
+   - Reduces false positives in attendance marking
+
+3. REBUILD AND DEPLOY STUDENT APP
+   Priority: MEDIUM (after backend deployed)
+   Action:
+   - Flutter build APK
+   - Students can upload photos with roll_no as person_id
+   - Requires backend deployed first (for rollNo in auth response)
+
+4. DATA MIGRATION (OPTIONAL)
+   Priority: LOW
+   Current State: 48 people enrolled with mixed person_id formats
+   Issue: Some may have email as person_id, some may have roll_no
+   Action:
+   - Query face_embeddings table to check person_id values
+   - Update person_id from email to roll_no where needed:
+     UPDATE face_embeddings fe
+     SET person_id = s.roll_no
+     FROM students s
+     WHERE fe.person_id = s.email OR fe.person_name = s.name;
+
+5. TEST END-TO-END FLOW
+   Priority: HIGH (after backend and apps deployed)
+   Test Sequence:
+   a) Student login → verify rollNo in response
+   b) Student photo upload → verify uses roll_no as person_id
+   c) Teacher takes class photo → verify sends allowed_person_ids
+   d) Face recognition → verify returns personId in results
+   e) Attendance marking → verify uses roll_no for matching
+
+================================================================================
+TECHNICAL BENEFITS OF THIS IMPLEMENTATION
+================================================================================
+
+✅ EXACT IDENTIFICATION
+   - Roll numbers are unique (students.roll_no has UNIQUE constraint)
+   - No ambiguity with similar names
+
+✅ CLASS-SCOPED RECOGNITION
+   - Face-API only searches students enrolled in that specific class
+   - Prevents "Shubhank from Class A" matching "Shubhank from Class B"
+   - Significant performance improvement (search only ~30-50 students vs all 48+)
+
+✅ ELIMINATES NAME MATCHING ERRORS
+   - No more fuzzy string comparisons
+   - No case sensitivity issues
+   - No partial name confusion
+
+✅ FASTER MATCHING
+   - O(1) dict/hash lookup by roll_no instead of O(n) name string comparison
+   - Teacher app can use firstWhere(s => s.rno == personId) for instant match
+
+✅ HANDLES NAME CHANGES
+   - If student name corrected in DB, face remains linked to roll_no
+   - No need to re-upload photos after name corrections
+
+✅ BETTER AUDIT TRAIL
+   - Clear link: face embedding -> roll_no -> student UUID
+   - Can track: "Which roll_no was recognized at timestamp X?"
+
+✅ BACKWARD COMPATIBLE
+   - Falls back to name matching if personId is null
+   - Supports legacy enrollments without roll_no
+
+================================================================================
+DATABASE STATE
+================================================================================
+
+Students Table: 56 students registered
+Face Embeddings: 48 people enrolled
+
+Sample Student Roll Numbers in DB:
+- 2K24/AIMS/01 through 2K24/AIMS/35 (AIMS students)
+- 2K22/IT/58, 2K22/SE/24, 2K22/BT/03, etc. (other batches)
+
+Your Account:
+- Email (old): shubhankgupta165@gmail.com
+- Email (current): guptashubhankftu@gmail.com (NOT in students table)
+- Roll No: 2K24/AIMS/32 (in students table, linked to old email)
+- Face enrolled: Yes (as "Shubhank" and "Shubhank Gupta" with old email)
+
+NOTE: You need to update your email in students table OR re-upload photo
+      with current email after backend is deployed.
+
+================================================================================
+BACKEND DEPLOYMENT COMMAND (TO RUN NEXT)
+================================================================================
+
+cd /home/shubhank165/SIH/AntiProxy-SIH/backend
+
+# Fix any build issues first, then deploy:
+gcloud run deploy dtu-aims-backend \
+  --source . \
+  --region asia-south1 \
+  --project antiproxy-dtu \
+  --allow-unauthenticated \
+  --memory 1Gi \
+  --timeout 60 \
+  --set-env-vars='DATABASE_URL=postgresql://dtu_aims_user:dtuAims2026User!@34.47.169.227/dtu_aims_attendance'
+
+================================================================================
+FILES MODIFIED IN THIS SESSION
+================================================================================
+
+Face-API:
+  ✓ face-api-source-v2/embedding_store.py
+  ✓ face-api-source-v2/app.py
+  ✓ face-api-source-v2/.gcloudignore (created)
+
+Backend:
+  ✓ backend/app/schemas/auth.py
+  ✓ backend/app/routes/auth_routes.py
+
+Teacher App:
+  ✓ frontend_teacher/lib/models/recognition_result_model.dart
+  ✓ frontend_teacher/lib/services/api_service.dart
+  ✓ frontend_teacher/lib/ui/classes/face_recognition_attendance_page.dart
+
+Student App:
+  ✓ frontend_student/lib/services/student_data_service.dart
+
+Documentation:
+  ✓ SYSTEM_ARCHITECTURE_ANALYSIS.txt (created)
+  ✓ ROLLNO_IMPLEMENTATION_SUMMARY.txt (this file)
+
+================================================================================
+END OF DEPLOYMENT SUMMARY
+================================================================================

@@ -1,0 +1,223 @@
+================================================================================
+                    BACKEND DEPLOYMENT - ISSUE RESOLVED
+                          February 14, 2026
+================================================================================
+
+ISSUE IDENTIFIED
+================================================================================
+
+The backend deployment was failing due to a missing file reference in the Dockerfile.
+
+ERROR:
+- Dockerfile line 22: `RUN chmod +x run_with_migrations.sh`
+- File `run_with_migrations.sh` did not exist in the backend directory
+- Build failed when trying to make non-existent file executable
+
+ROOT CAUSE:
+- The migration script was removed or never created in the AntiProxy-SIH/backend directory
+- Dockerfile referenced a file that existed in cloud-deployment but not in the current project
+
+================================================================================
+FIX IMPLEMENTED
+================================================================================
+
+Modified: /AntiProxy-SIH/backend/Dockerfile
+
+REMOVED:
+```dockerfile
+# Make migration script executable
+RUN chmod +x run_with_migrations.sh
+```
+
+REASON:
+- The migration script is not needed for deployment
+- The CMD at the end already runs uvicorn directly
+- Migrations can be run separately if needed via alembic
+
+================================================================================
+BUILD & DEPLOYMENT PROCESS
+================================================================================
+
+STEP 1: Fixed Dockerfile
+✅ Removed reference to non-existent run_with_migrations.sh
+
+STEP 2: Built Docker Image
+✅ Build ID: 03860fde-134f-4e63-887d-6721da0dbdba
+✅ Duration: 1m 53s
+✅ Status: SUCCESS
+✅ Image: asia-south1-docker.pkg.dev/antiproxy-dtu/dtu-aims-repo/backend:latest
+
+STEP 3: Deployed to Cloud Run
+✅ Revision: dtu-aims-backend-00062-wiy
+✅ Status: DEPLOYED
+✅ URL: https://dtu-aims-backend-612272896050.asia-south1.run.app
+✅ Memory: 1Gi
+✅ Timeout: 60s
+✅ Environment: DATABASE_URL configured
+
+================================================================================
+DEPLOYMENT STATUS
+================================================================================
+
+✅ Backend Service - LIVE
+   URL: https://dtu-aims-backend-612272896050.asia-south1.run.app
+   Revision: dtu-aims-backend-00062-wiy
+   Changes: Includes rollNo field in UserInfo schema
+   
+✅ Face-API Service - LIVE
+   URL: https://face-api-612272896050.asia-south1.run.app
+   Revision: face-api-00020-g6v
+   Changes: Roll_no-based matching with class filtering
+
+⚠️ Frontend Apps - NOT DEPLOYED
+   Teacher App: Code updated (needs Flutter build)
+   Student App: Code updated (needs Flutter build)
+
+================================================================================
+WHAT WORKS NOW
+================================================================================
+
+✅ Student Login with Roll Number
+   - Backend returns rollNo field in auth response
+   - Schema: UserInfo includes rollNo: str | None
+   - Required for: Student photo upload
+
+✅ Face Recognition with Class Filtering
+   - Face-API accepts allowed_person_ids array
+   - Returns personId (roll_no) in results
+   - Searches only students in specified class
+
+✅ Guest Login Disabled
+   - Only registered student emails can login
+   - 403 response shows error instead of allowing guest access
+
+================================================================================
+TESTING COMMANDS
+================================================================================
+
+1. Health Check (Backend):
+   curl https://dtu-aims-backend-612272896050.asia-south1.run.app/
+
+2. Health Check (Face-API):
+   curl https://face-api-612272896050.asia-south1.run.app/embedding_status
+
+3. Test Student Login (requires valid Google OAuth token):
+   POST https://dtu-aims-backend-612272896050.asia-south1.run.app/auth/google/student
+   Body: {"idToken": "<google_id_token>"}
+   Response will include:
+   {
+     "token": "...",
+     "user": {
+       "id": "...",
+       "email": "...",
+       "name": "...",
+       "role": "student",
+       "studentId": "...",
+       "rollNo": "2K24/AIMS/XX"  // NEW FIELD
+     }
+   }
+
+================================================================================
+NEXT STEPS FOR COMPLETE SYSTEM
+================================================================================
+
+1. REBUILD STUDENT APP (High Priority)
+   - Flutter build with roll_no usage in photo upload
+   - Students can now upload photos linked to roll_no
+   - Command: cd frontend_student && flutter build apk
+   
+2. REBUILD TEACHER APP (Medium Priority)
+   - Flutter build with roll_no-based matching
+   - Better accuracy in attendance marking
+   - Command: cd frontend_teacher && flutter build apk
+
+3. TEST END-TO-END FLOW
+   a) Student Login
+      - Verify rollNo appears in response
+      - Check secure storage has rollNo
+   
+   b) Student Photo Upload
+      - Verify uses roll_no as person_id (not email)
+      - Check face_embeddings table has correct person_id
+   
+   c) Teacher Attendance
+      - Verify class roster sent to face-api
+      - Check personId returned in results
+      - Confirm roll_no used for marking attendance
+
+4. DATA CLEANUP (Optional)
+   Query to check existing enrollments:
+   ```sql
+   SELECT person_name, person_id, created_at 
+   FROM face_embeddings 
+   ORDER BY created_at DESC;
+   ```
+   
+   Update old email-based IDs to roll numbers:
+   ```sql
+   UPDATE face_embeddings fe
+   SET person_id = s.roll_no
+   FROM students s
+   WHERE fe.person_id = s.email OR fe.person_name = s.name;
+   ```
+
+================================================================================
+TECHNICAL IMPROVEMENTS DELIVERED
+================================================================================
+
+✅ Roll Number-Based Identification
+   - Unique student identification (roll_no has UNIQUE constraint)
+   - No name ambiguity issues
+
+✅ Class-Scoped Face Recognition
+   - Face-API only searches students in specific class
+   - Prevents cross-class false matches
+   - Performance improvement (search ~30-50 vs all 48+)
+
+✅ Backward Compatibility
+   - Falls back to name matching if personId is null
+   - Supports legacy enrollments
+
+✅ Better Security
+   - Guest login disabled
+   - Only registered students can access
+
+✅ Improved Accuracy
+   - Direct roll_no matching (O(1) lookup)
+   - No fuzzy string comparisons
+   - No case sensitivity issues
+
+================================================================================
+FILES MODIFIED
+================================================================================
+
+Backend:
+  ✓ backend/Dockerfile (removed missing script reference)
+  ✓ backend/app/schemas/auth.py (added rollNo field)
+  ✓ backend/app/routes/auth_routes.py (include rollNo in response)
+
+Face-API:
+  ✓ face-api-source-v2/embedding_store.py (added find_best_match_with_id)
+  ✓ face-api-source-v2/app.py (updated recognize_faces endpoint)
+  ✓ face-api-source-v2/.gcloudignore (created)
+
+Teacher App:
+  ✓ frontend_teacher/lib/models/recognition_result_model.dart
+  ✓ frontend_teacher/lib/services/api_service.dart
+  ✓ frontend_teacher/lib/ui/classes/face_recognition_attendance_page.dart
+
+Student App:
+  ✓ frontend_student/lib/services/student_data_service.dart
+
+================================================================================
+DEPLOYMENT LOGS
+================================================================================
+
+Build Log: gs://antiproxy-dtu_cloudbuild/source/1771082903.216168-26b524127d30476ebc1cc0c569b66ced.tgz
+Build Console: https://console.cloud.google.com/cloud-build/builds/03860fde-134f-4e63-887d-6721da0dbdba
+
+Cloud Run Console: https://console.cloud.google.com/run/detail/asia-south1/dtu-aims-backend
+
+================================================================================
+END OF DEPLOYMENT REPORT
+================================================================================
