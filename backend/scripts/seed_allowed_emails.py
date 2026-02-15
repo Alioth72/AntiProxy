@@ -21,29 +21,43 @@ def seed_allowed_emails():
     db: Session = SessionLocal()
     
     try:
-        # Sample allowed emails (replace with actual faculty emails)
+        # Authorized teacher emails for DTU AIMS system
         allowed_emails = [
             {
-                "email": "mayank.jangid.moon@gmail.com",
-                "name": "Mayank Jangid",
+                "email": "vivaanjaindps@gmail.com",
+                "name": "Vivaan Jain",
                 "role": UserRole.TEACHER
             },
             {
-                "email": "admin@dtu.ac.in",
-                "name": "System Administrator",
-                "role": UserRole.ADMIN
-            },
-            {
-                "email": "teacher1@dtu.ac.in",
-                "name": "Dr. Faculty Member 1",
+                "email": "shubhankgupta165@gmail.com",
+                "name": "Shubhank Gupta",
                 "role": UserRole.TEACHER
             },
             {
-                "email": "teacher2@dtu.ac.in",
-                "name": "Dr. Faculty Member 2",
+                "email": "rudranshsinghrathore15@gmail.com",
+                "name": "Rudransh Singh Rathore",
                 "role": UserRole.TEACHER
             },
-            # Add more faculty emails here
+            {
+                "email": "jeeprep165@gmail.com",
+                "name": "Teacher 4",
+                "role": UserRole.TEACHER
+            },
+            {
+                "email": "007aryansood@gmail.com",
+                "name": "Aryan Sood",
+                "role": UserRole.TEACHER
+            },
+            {
+                "email": "aarushi28alpha@gmail.com",
+                "name": "Aarushi",
+                "role": UserRole.TEACHER
+            },
+            {
+                "email": "aliothmerak123@gmail.com",
+                "name": "Teacher 7",
+                "role": UserRole.TEACHER
+            }
         ]
         
         for email_data in allowed_emails:
