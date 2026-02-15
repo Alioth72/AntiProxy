@@ -454,9 +454,8 @@ flutter test
 
 For issues:
 1. Check the documentation: [backend/README.md](backend/README.md)
-2. Review [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)
-3. Check logs: `docker-compose logs -f backend`
-4. Open an issue on GitHub
+2. Check logs: `docker-compose logs -f backend`
+3. Open an issue on GitHub
 
 ---
 
