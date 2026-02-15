@@ -431,10 +431,7 @@ flutter test
 
 - [ ] Offline support in Flutter with local SQLite cache
 - [ ] WebSocket for real-time updates
-- [ ] Admin dashboard web app
-- [ ] Face recognition integration with detection confidence
 - [ ] Audit logging for all data modifications
-- [ ] Excel/CSV export of attendance reports
 - [ ] Email notifications for low attendance
 - [ ] Row-Level Security (RLS) in PostgreSQL
 - [ ] CI/CD pipeline (GitHub Actions)
@@ -442,13 +439,14 @@ flutter test
 
 ---
 
-## 👥 Contributors
+## 👥 Contributors (TEAM TOINCOSS)
 
-- [Your Name/Team]
-
-## 📄 License
-
-[Your License]
+- Aaarat Chadda
+- Aryan Sood 
+- Aarushi Anand
+- Rudransh Singh Rathore
+- Shubhank Gupta
+- Vivaan Jain
 
 ---
 
