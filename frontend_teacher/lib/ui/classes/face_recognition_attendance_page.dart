@@ -82,11 +82,6 @@ class _FaceRecognitionAttendancePageState
                   onTap: () => Navigator.pop(context, ImageSource.gallery),
                 ),
                 ListTile(
-                  leading: const Icon(Icons.science),
-                  title: const Text('Use Test Image (aims_fotu2.jpg)'),
-                  onTap: () => Navigator.pop(context, 'test'),
-                ),
-                ListTile(
                   leading: const Icon(Icons.cancel),
                   title: const Text('Cancel'),
                   onTap: () => Navigator.pop(context),
@@ -98,28 +93,6 @@ class _FaceRecognitionAttendancePageState
       );
 
       if (result == null) return;
-
-      if (result == 'test') {
-        // Use the test image from assets
-        try {
-          debugPrint('Loading test image from assets...');
-          final ByteData data = await DefaultAssetBundle.of(context)
-              .load('assets/images/aims_fotu2.jpg');
-          final List<int> bytes = data.buffer.asUint8List();
-          debugPrint('Test image loaded, size: ${bytes.length} bytes');
-
-          final tempDir = await Directory.systemTemp.createTemp();
-          final testImageFile = File('${tempDir.path}/aims_fotu2.jpg');
-          await testImageFile.writeAsBytes(bytes);
-          debugPrint('Test image saved to: ${testImageFile.path}');
-
-          await _processImage(testImageFile);
-        } catch (e) {
-          debugPrint('Error loading test image: $e');
-          _showErrorDialog('Error loading test image: $e');
-        }
-        return;
-      }
 
       final XFile? image = await _picker.pickImage(
         source: result as ImageSource,
@@ -914,7 +887,7 @@ class _FaceRecognitionAttendancePageState
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
+                          color: Colors.black,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -922,7 +895,7 @@ class _FaceRecognitionAttendancePageState
                         'Detecting faces and recognizing students',
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.grey,
+                          color: Colors.black,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -938,9 +911,9 @@ class _FaceRecognitionAttendancePageState
                         ),
                         child: Text(
                           'This may take a few seconds',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 12,
-                            color: Theme.of(context).colorScheme.primary,
+                            color: Colors.white,
                             fontWeight: FontWeight.w500,
                           ),
                         ),

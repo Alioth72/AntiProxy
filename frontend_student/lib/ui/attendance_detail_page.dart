@@ -90,8 +90,10 @@ class _AttendanceDetailPageState extends State<AttendanceDetailPage> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),
                 child: Text(
-                  _error!,
+                  'Unable to fetch attendance data. Please try again.',
                   textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: Colors.grey[400]),
                 ),
               ),
@@ -135,8 +137,11 @@ class _AttendanceDetailPageState extends State<AttendanceDetailPage> {
 
   Widget _buildClassInfo() {
     return Card(
+      elevation: 3,
+      shadowColor: Colors.black.withOpacity(0.4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -147,22 +152,28 @@ class _AttendanceDetailPageState extends State<AttendanceDetailPage> {
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Icon(Icons.person, size: 16, color: Colors.grey[400]),
-                const SizedBox(width: 4),
-                Text(
-                  _stats!.studentName,
-                  style: TextStyle(color: Colors.grey[400]),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _stats!.studentName,
+                    style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Icon(Icons.badge, size: 16, color: Colors.grey[400]),
-                const SizedBox(width: 4),
+                const SizedBox(width: 6),
                 Text(
                   _stats!.rollNo,
-                  style: TextStyle(color: Colors.grey[400]),
+                  style: TextStyle(color: Colors.grey[400], fontSize: 14),
                 ),
               ],
             ),
@@ -177,19 +188,29 @@ class _AttendanceDetailPageState extends State<AttendanceDetailPage> {
     final isGood = percentage >= 75.0;
 
     return Card(
+      elevation: 3,
+      shadowColor: Colors.black.withOpacity(0.4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  isGood ? Icons.check_circle : Icons.warning,
-                  color: isGood ? Colors.green : Colors.red,
-                  size: 40,
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: (isGood ? Colors.green : Colors.red).withOpacity(0.2),
+                  ),
+                  child: Icon(
+                    isGood ? Icons.check_circle : Icons.warning,
+                    color: isGood ? Colors.green : Colors.red,
+                    size: 40,
+                  ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 16),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -197,14 +218,15 @@ class _AttendanceDetailPageState extends State<AttendanceDetailPage> {
                       'Overall Attendance',
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),
                     ),
+                    const SizedBox(height: 4),
                     Text(
                       '${percentage.toStringAsFixed(1)}%',
                       style: TextStyle(
-                        fontSize: 36,
+                        fontSize: 38,
                         fontWeight: FontWeight.bold,
                         color: isGood ? Colors.green : Colors.red,
                       ),
@@ -213,7 +235,7 @@ class _AttendanceDetailPageState extends State<AttendanceDetailPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -223,12 +245,14 @@ class _AttendanceDetailPageState extends State<AttendanceDetailPage> {
                 _buildStatItem('Excused', _stats!.excusedCount, Colors.blue),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
+            Divider(color: Colors.grey[800]),
+            const SizedBox(height: 12),
             Text(
               'Total Sessions: ${_stats!.totalCount}',
               style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
                 color: Colors.white,
               ),
             ),
@@ -244,15 +268,17 @@ class _AttendanceDetailPageState extends State<AttendanceDetailPage> {
         Text(
           value.toString(),
           style: TextStyle(
-            fontSize: 24,
+            fontSize: 26,
             fontWeight: FontWeight.bold,
             color: color,
           ),
         ),
+        const SizedBox(height: 4),
         Text(
           label,
           style: TextStyle(
-            fontSize: 12,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
             color: Colors.grey[400],
           ),
         ),
@@ -268,8 +294,11 @@ class _AttendanceDetailPageState extends State<AttendanceDetailPage> {
     }
 
     return Card(
+      elevation: 3,
+      shadowColor: Colors.black.withOpacity(0.4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           children: [
             const Text(
@@ -280,12 +309,12 @@ class _AttendanceDetailPageState extends State<AttendanceDetailPage> {
                 color: Colors.white,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             SizedBox(
-              height: 200,
+              height: 220,
               child: PieChart(
                 PieChartData(
-                  sectionsSpace: 2,
+                  sectionsSpace: 3,
                   centerSpaceRadius: 50,
                   sections: [
                     if (_stats!.presentCount > 0)
@@ -344,10 +373,10 @@ class _AttendanceDetailPageState extends State<AttendanceDetailPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 40),
             Wrap(
-              spacing: 16,
-              runSpacing: 8,
+              spacing: 20,
+              runSpacing: 12,
               alignment: WrapAlignment.center,
               children: [
                 _buildLegendItem('Present', Colors.green),
@@ -367,17 +396,17 @@ class _AttendanceDetailPageState extends State<AttendanceDetailPage> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 12,
-          height: 12,
+          width: 10,
+          height: 10,
           decoration: BoxDecoration(
             color: color,
             shape: BoxShape.circle,
           ),
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 6),
         Text(
           label,
-          style: const TextStyle(fontSize: 12, color: Colors.white),
+          style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w500),
         ),
       ],
     );
@@ -386,16 +415,26 @@ class _AttendanceDetailPageState extends State<AttendanceDetailPage> {
   Widget _buildAttendanceList() {
     if (_stats!.records.isEmpty) {
       return Card(
+        elevation: 3,
+        shadowColor: Colors.black.withOpacity(0.4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.all(40),
           child: Center(
             child: Column(
               children: [
-                const Icon(Icons.event_busy, size: 60, color: Colors.grey),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.grey[900],
+                  ),
+                  child: Icon(Icons.event_busy, size: 50, color: Colors.grey[600]),
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'No attendance records yet',
-                  style: TextStyle(color: Colors.grey[400]),
+                  style: TextStyle(color: Colors.grey[400], fontSize: 15),
                 ),
               ],
             ),
@@ -405,11 +444,14 @@ class _AttendanceDetailPageState extends State<AttendanceDetailPage> {
     }
 
     return Card(
+      elevation: 3,
+      shadowColor: Colors.black.withOpacity(0.4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
             const Padding(
-            padding: EdgeInsets.all(16),
+            padding: EdgeInsets.all(18),
             child: Text(
               'Attendance History',
               style: TextStyle(
@@ -465,41 +507,73 @@ class _AttendanceDetailPageState extends State<AttendanceDetailPage> {
         statusIcon = Icons.help;
     }
 
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: statusColor.withOpacity(0.2),
-        child: Icon(statusIcon, color: statusColor, size: 24),
-      ),
-      title: Text(
-        dateStr,
-        style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white),
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
         children: [
-          Text(dayStr, style: TextStyle(color: Colors.grey[400])),
-          if (record.recognizedByAi && record.similarityScore != null)
-            Text(
-              'AI Detected (${record.similarityScore!.toStringAsFixed(0)}% match)',
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey[400],
+          CircleAvatar(
+            backgroundColor: statusColor.withOpacity(0.2),
+            radius: 22,
+            child: Icon(statusIcon, color: statusColor, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  dateStr,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  dayStr,
+                  style: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 13,
+                  ),
+                ),
+                if (record.recognizedByAi && record.similarityScore != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'AI Detected (${record.similarityScore!.toStringAsFixed(0)}% match)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.blue[300],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: statusColor.withOpacity(0.5),
+                width: 1,
               ),
             ),
-        ],
-      ),
-      trailing: Chip(
-        label: Text(
-          record.status.toUpperCase(),
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            color: statusColor,
+            child: Text(
+              record.status.toUpperCase(),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: statusColor,
+              ),
+            ),
           ),
-        ),
-        backgroundColor: statusColor.withOpacity(0.2),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        ],
       ),
     );
   }
 }
+

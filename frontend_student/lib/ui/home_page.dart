@@ -59,35 +59,51 @@ class _HomePageState extends State<HomePage> {
 
           if (dataService.classes.isEmpty) {
             return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.school, size: 80, color: Colors.grey[600]),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No Classes Found',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.grey[900],
+                      ),
+                      child: Icon(Icons.school, size: 80, color: Colors.grey[600]),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'You are not enrolled in any classes yet.\nContact your teacher to get enrolled.',
-                    style: TextStyle(color: Colors.grey[400]),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      await dataService.loadData();
-                      await dataService.refreshGamification(forceRefresh: true);
-                    },
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Refresh'),
-                  ),
-                ],
+                    const SizedBox(height: 24),
+                    const Text(
+                      'No Classes Found',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'You are not enrolled in any classes yet.\nContact your teacher to get enrolled.',
+                      style: TextStyle(color: Colors.grey[400], fontSize: 15, height: 1.5),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 32),
+                    FilledButton.icon(
+                      onPressed: () async {
+                        await dataService.loadData();
+                        await dataService.refreshGamification(forceRefresh: true);
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Refresh'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           }
@@ -270,8 +286,10 @@ class _HomePageState extends State<HomePage> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
+      elevation: 3,
+      shadowColor: Colors.black.withOpacity(0.4),
       color: Colors.grey[900],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: InkWell(
         onTap: () {
           Navigator.push(
@@ -281,7 +299,7 @@ class _HomePageState extends State<HomePage> {
             ),
           );
         },
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -300,6 +318,8 @@ class _HomePageState extends State<HomePage> {
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -309,6 +329,8 @@ class _HomePageState extends State<HomePage> {
                             fontWeight: FontWeight.w500,
                             color: Colors.grey[300],
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -316,41 +338,55 @@ class _HomePageState extends State<HomePage> {
                   Icon(Icons.chevron_right, color: Colors.grey[600]),
                   const SizedBox(width: 8),
                   // BT dot indicator
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: btDotColor(),
-                        ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: btDotColor().withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: btDotColor().withOpacity(0.5),
+                        width: 1,
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        btPresent
-                            ? 'BT Present'
-                            : btEnabled
-                                ? 'BT Ready'
-                                : 'BT Off',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey[400],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: btDotColor(),
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 6),
+                        Text(
+                          btPresent
+                              ? 'BT Present'
+                              : btEnabled
+                                  ? 'BT Ready'
+                                  : 'BT Off',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: btDotColor(),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
+              Divider(color: Colors.grey[800], height: 1),
+              const SizedBox(height: 14),
               Row(
                 children: [
                   Icon(Icons.class_, size: 16, color: Colors.grey[500]),
                   const SizedBox(width: 4),
                   Text(
                     'Section ${classModel.section}',
-                    style: TextStyle(color: Colors.grey[400]),
+                    style: TextStyle(color: Colors.grey[400], fontSize: 13),
                   ),
                   if (classModel.ltpPattern != null) ...[
                     const SizedBox(width: 16),
@@ -358,7 +394,7 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(width: 4),
                     Text(
                       classModel.ltpPattern!,
-                      style: TextStyle(color: Colors.grey[400]),
+                      style: TextStyle(color: Colors.grey[400], fontSize: 13),
                     ),
                   ],
                 ],
@@ -371,15 +407,17 @@ class _HomePageState extends State<HomePage> {
                   Expanded(
                     child: Text(
                       classModel.teacherName,
-                      style: TextStyle(color: Colors.grey[400]),
+                      style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
               if (classModel.schedule.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Divider(color: Colors.grey[800], height: 1),
                 const SizedBox(height: 12),
-                Divider(color: Colors.grey[800]),
-                const SizedBox(height: 8),
                 Text(
                   'Schedule',
                   style: TextStyle(
@@ -394,14 +432,18 @@ class _HomePageState extends State<HomePage> {
                   runSpacing: 8,
                   children: classModel.schedule.map((schedule) {
                     return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.grey[800],
+                        color: Colors.grey[800]?.withOpacity(0.6),
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.grey[700]!.withOpacity(0.5),
+                          width: 1,
+                        ),
                       ),
                       child: Text(
                         '${schedule.getDayName()}: ${schedule.startTime}-${schedule.endTime}',
-                        style: const TextStyle(fontSize: 11, color: Colors.white),
+                        style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w500),
                       ),
                     );
                   }).toList(),

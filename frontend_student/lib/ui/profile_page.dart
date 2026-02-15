@@ -59,6 +59,10 @@ class ProfilePage extends StatelessWidget {
               padding: const EdgeInsets.all(32.0),
               decoration: BoxDecoration(
                 color: Colors.grey[900],
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(24),
+                  bottomRight: Radius.circular(24),
+                ),
               ),
               child: Column(
                 children: [
@@ -75,6 +79,13 @@ class ProfilePage extends StatelessWidget {
                             color: Colors.white.withOpacity(0.3),
                             width: 2,
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.4),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
                         child: dataService.hasPhoto &&
                                 dataService.photoUrl != null &&
@@ -140,6 +151,8 @@ class ProfilePage extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -148,6 +161,8 @@ class ProfilePage extends StatelessWidget {
                       fontSize: 14,
                       color: Colors.white.withOpacity(0.7),
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -189,54 +204,13 @@ class ProfilePage extends StatelessWidget {
               ),
             ),
 
-            // Upload Photo Button (when no photo)
-            if (!dataService.hasPhoto)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.add_a_photo),
-                    label: const Text('Upload Photo for Face Recognition'),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const PhotoCapturePage(),
-                        ),
-                      ).then((uploaded) {
-                        if (uploaded == true) {
-                          dataService.checkPhotoStatus();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Photo uploaded successfully! Your face is now enrolled for attendance.'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                        }
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-            const SizedBox(height: 12),
-
-            // Update Photo Button (when photo exists)
+            // Update Photo Button
             if (dataService.hasPhoto)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: SizedBox(
                   width: double.infinity,
-                  child: OutlinedButton.icon(
+                  child: FilledButton.icon(
                     icon: const Icon(Icons.camera_alt),
                     label: const Text('Update Photo'),
                     onPressed: () {
@@ -252,14 +226,15 @@ class ProfilePage extends StatelessWidget {
                             const SnackBar(
                               content: Text('Photo updated successfully!'),
                               backgroundColor: Colors.green,
+                              duration: Duration(seconds: 2),
                             ),
                           );
                         }
                       });
                     },
-                    style: OutlinedButton.styleFrom(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white.withOpacity(0.1),
                       foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white, width: 1.5),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -276,14 +251,14 @@ class ProfilePage extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: SizedBox(
                 width: double.infinity,
-                child: ElevatedButton.icon(
+                child: FilledButton.icon(
                   icon: const Icon(Icons.logout),
                   label: const Text('Log out'),
                   onPressed: () {
                     _showLogoutDialog(context);
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.red.withOpacity(0.8),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
@@ -334,16 +309,27 @@ class ProfilePage extends StatelessWidget {
 
     return Card(
       color: Colors.grey[900],
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 4,
+      shadowColor: Colors.black.withOpacity(0.6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Image.asset(badgeAsset, width: 80, height: 80),
+                Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: accentColor.withOpacity(0.5),
+                      width: 2,
+                    ),
+                  ),
+                  child: Image.asset(badgeAsset, width: 80, height: 80),
+                ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -356,11 +342,15 @@ class ProfilePage extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                           color: accentColor,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'Local gamification based on your attendance',
-                        style: TextStyle(color: Colors.grey[400]),
+                        style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -373,7 +363,7 @@ class ProfilePage extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Text(
               'Overall attendance: ${percent.toStringAsFixed(1)}%',
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
@@ -382,80 +372,118 @@ class ProfilePage extends StatelessWidget {
               '${status.attendedSessions} of ${status.totalSessions} sessions attended',
               style: smallText(Colors.grey[400]),
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(Icons.flag, color: accentColor, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  'Level 2 (Ascendent): 70%+ & 5+ sessions',
-                  style: TextStyle(color: Colors.grey[300]),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            LinearProgressIndicator(
-              value: percentTo70,
-              minHeight: 8,
-              backgroundColor: Colors.grey[800],
-              color: Colors.orangeAccent,
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 4, bottom: 6),
-              child: Text(
-                'Progress to 70%: ${percent.toStringAsFixed(1)}% / 70%',
-                style: smallText(Colors.grey[400]),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[800]?.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.flag, color: accentColor, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Level 2 (Ascendent): 70%+ & 5+ sessions',
+                          style: TextStyle(color: Colors.grey[300], fontSize: 13),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: percentTo70,
+                    minHeight: 8,
+                    backgroundColor: Colors.grey[800],
+                    color: Colors.orangeAccent,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'Progress to 70%: ${percent.toStringAsFixed(1)}% / 70%',
+                      style: smallText(Colors.grey[400]),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(
+                    value: sessionsTo5,
+                    minHeight: 8,
+                    backgroundColor: Colors.grey[800],
+                    color: Colors.orange,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      '${status.totalSessions} / 5 sessions counted',
+                      style: smallText(Colors.grey[400]),
+                    ),
+                  ),
+                ],
               ),
             ),
-            LinearProgressIndicator(
-              value: sessionsTo5,
-              minHeight: 8,
-              backgroundColor: Colors.grey[800],
-              color: Colors.orange,
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                '${status.totalSessions} / 5 sessions counted',
-                style: smallText(Colors.grey[400]),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[800]?.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(10),
               ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(Icons.star, color: accentColor, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  'Level 3 (Conqueror): 90%+ & 10+ sessions',
-                  style: TextStyle(color: Colors.grey[300]),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            LinearProgressIndicator(
-              value: percentTo90,
-              minHeight: 8,
-              backgroundColor: Colors.grey[800],
-              color: Colors.greenAccent,
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 4, bottom: 6),
-              child: Text(
-                'Progress to 90%: ${percent.toStringAsFixed(1)}% / 90%',
-                style: smallText(Colors.grey[400]),
-              ),
-            ),
-            LinearProgressIndicator(
-              value: sessionsTo10,
-              minHeight: 8,
-              backgroundColor: Colors.grey[800],
-              color: Colors.lightGreen,
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                '${status.totalSessions} / 10 sessions counted',
-                style: smallText(Colors.grey[400]),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.star, color: accentColor, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Level 3 (Conqueror): 90%+ & 10+ sessions',
+                          style: TextStyle(color: Colors.grey[300], fontSize: 13),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: percentTo90,
+                    minHeight: 8,
+                    backgroundColor: Colors.grey[800],
+                    color: Colors.greenAccent,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'Progress to 90%: ${percent.toStringAsFixed(1)}% / 90%',
+                      style: smallText(Colors.grey[400]),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(
+                    value: sessionsTo10,
+                    minHeight: 8,
+                    backgroundColor: Colors.grey[800],
+                    color: Colors.lightGreen,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      '${status.totalSessions} / 10 sessions counted',
+                      style: smallText(Colors.grey[400]),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -475,15 +503,26 @@ class ProfilePage extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.08),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
+              color: Colors.white.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: Colors.white, size: 20),
           ),
@@ -497,16 +536,19 @@ class ProfilePage extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.white.withOpacity(0.6),
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 Text(
                   value,
                   style: TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                     color: statusColor ?? Colors.white,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
