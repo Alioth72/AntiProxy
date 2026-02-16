@@ -40,8 +40,8 @@ class _FaceRecognitionAttendancePageState
   bool _manualAttendanceCompleted = false; // Track if manual attendance is done
   late DateTime _selectedDate;
   
-  // Similarity threshold for face recognition (30%)
-  static const double _similarityThreshold = 0.30;
+  // Similarity threshold for face recognition (20%)
+  static const double _similarityThreshold = 0.20;
 
   @override
   void initState() {
