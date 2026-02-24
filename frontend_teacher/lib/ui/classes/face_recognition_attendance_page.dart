@@ -13,6 +13,24 @@ import '../../services/http_data_service.dart';
 import 'swipe_attendance_page.dart';
 import 'attendance_orchestration_page.dart';
 
+/// Tracks the state of each selected image through the recognition pipeline.
+enum ImageStatus { pending, processing, completed, failed }
+
+/// Holds a selected image file along with its processing state and results.
+class _ImageEntry {
+  final File file;
+  ImageStatus status;
+  String? processedImagePath;
+  List<RecognitionResultModel> results;
+  Set<String> matchedRollNumbers; // roll numbers matched from THIS image only
+  String? errorMessage;
+
+  _ImageEntry(this.file)
+      : status = ImageStatus.pending,
+        results = [],
+        matchedRollNumbers = {};
+}
+
 class FaceRecognitionAttendancePage extends StatefulWidget {
   final ClassModel classModel;
   final DateTime selectedDate;
@@ -33,15 +51,26 @@ class _FaceRecognitionAttendancePageState
   final ApiService _apiService = ApiService();
   final ImagePicker _picker = ImagePicker();
 
+  // --- Multi-image state ---
+  final List<_ImageEntry> _images = [];
   bool _isProcessing = false;
-  String? _processedImagePath;
-  List<RecognitionResultModel> _recognitionResults = [];
+  int _currentProcessingIndex = -1;
   Map<String, String> _studentStatuses = {};
-  bool _manualAttendanceCompleted = false; // Track if manual attendance is done
   late DateTime _selectedDate;
-  
+
+  // Union of ALL matched roll numbers across all images (recalculated on removal)
+  Set<String> _unionRollNumbers = {};
+
+  // Best recognition result per roll number (highest similarity)
+  Map<String, RecognitionResultModel> _bestResults = {};
+
   // Similarity threshold for face recognition (20%)
   static const double _similarityThreshold = 0.20;
+
+  // Whether processing has been run at least once
+  bool get _hasProcessed => _images.any((e) => e.status == ImageStatus.completed);
+  bool get _allProcessed =>
+      _images.isNotEmpty && _images.every((e) => e.status != ImageStatus.pending);
 
   @override
   void initState() {
@@ -50,20 +79,49 @@ class _FaceRecognitionAttendancePageState
     _selectedDate = widget.selectedDate;
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // Student status helpers
+  // ─────────────────────────────────────────────────────────────────
+
   void _initializeStudentStatuses() {
-    // Initialize all students as absent
-    debugPrint(
-        'Initializing student statuses for ${widget.classModel.students.length} students');
     for (var student in widget.classModel.students) {
       _studentStatuses[student.rno] = 'absent';
-      debugPrint('Initialized ${student.name} (${student.rno}) as absent');
     }
-    debugPrint('Total initialized: ${_studentStatuses.length}');
   }
 
-  Future<void> _pickImage() async {
+  void _rebuildUnionAndStatuses() {
+    // Recalculate union from scratch using only completed images
+    _unionRollNumbers.clear();
+    _bestResults.clear();
+    for (var entry in _images) {
+      if (entry.status == ImageStatus.completed) {
+        _unionRollNumbers.addAll(entry.matchedRollNumbers);
+        for (var result in entry.results) {
+          if (result.similarityScore >= _similarityThreshold) {
+            final rollNo = result.personId ?? '';
+            if (rollNo.isEmpty) continue;
+            final existing = _bestResults[rollNo];
+            if (existing == null ||
+                result.similarityScore > existing.similarityScore) {
+              _bestResults[rollNo] = result;
+            }
+          }
+        }
+      }
+    }
+    // Update student statuses from union
+    _initializeStudentStatuses();
+    for (var rollNo in _unionRollNumbers) {
+      _studentStatuses[rollNo] = 'present';
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Image picking
+  // ─────────────────────────────────────────────────────────────────
+
+  Future<void> _pickImages() async {
     try {
-      // Show options for camera, gallery, or test image
       final dynamic result = await showModalBottomSheet(
         context: context,
         builder: (BuildContext context) {
@@ -74,12 +132,12 @@ class _FaceRecognitionAttendancePageState
                 ListTile(
                   leading: const Icon(Icons.camera_alt),
                   title: const Text('Take Photo'),
-                  onTap: () => Navigator.pop(context, ImageSource.camera),
+                  onTap: () => Navigator.pop(context, 'camera'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.photo_library),
-                  title: const Text('Choose from Gallery'),
-                  onTap: () => Navigator.pop(context, ImageSource.gallery),
+                  title: const Text('Choose from Gallery (multi-select)'),
+                  onTap: () => Navigator.pop(context, 'gallery'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.cancel),
@@ -94,206 +152,187 @@ class _FaceRecognitionAttendancePageState
 
       if (result == null) return;
 
-      final XFile? image = await _picker.pickImage(
-        source: result as ImageSource,
-        maxWidth: 1920,
-        maxHeight: 1080,
-        imageQuality: 85,
-      );
-
-      if (image != null) {
-        await _processImage(File(image.path));
+      if (result == 'camera') {
+        final XFile? image = await _picker.pickImage(
+          source: ImageSource.camera,
+          maxWidth: 1920,
+          maxHeight: 1080,
+          imageQuality: 85,
+        );
+        if (image != null) {
+          setState(() => _images.add(_ImageEntry(File(image.path))));
+        }
+      } else {
+        // Gallery – allow multi-select
+        final List<XFile> picked = await _picker.pickMultiImage(
+          maxWidth: 1920,
+          maxHeight: 1080,
+          imageQuality: 85,
+        );
+        if (picked.isNotEmpty) {
+          setState(() {
+            for (var xf in picked) {
+              _images.add(_ImageEntry(File(xf.path)));
+            }
+          });
+        }
       }
     } catch (e) {
       _showErrorDialog('Error picking image: $e');
     }
   }
 
-  Future<void> _processImage(File imageFile) async {
+  // ─────────────────────────────────────────────────────────────────
+  // Remove image
+  // ─────────────────────────────────────────────────────────────────
+
+  void _removeImage(int index) {
     setState(() {
-      _isProcessing = true;
+      _images.removeAt(index);
+      _rebuildUnionAndStatuses();
     });
-
-    try {
-      // Extract roll numbers from class roster to filter face recognition
-      final List<String> allowedRollNumbers = widget.classModel.students
-          .map((student) => student.rno)
-          .toList();
-      
-      debugPrint('Sending ${allowedRollNumbers.length} roll numbers to face-api for filtering');
-      
-      final result = await _apiService.processImageForAttendance(
-        imageFile,
-        allowedRollNumbers: allowedRollNumbers,  // Filter by class roster
-      );
-      final processedImagePath = result.$1;
-      final recognitionResults = result.$2;
-
-      setState(() {
-        _processedImagePath = processedImagePath;
-        _recognitionResults = recognitionResults;
-        _isProcessing = false;
-      });
-
-      // Update student statuses based on recognition results
-      _updateStudentStatusesFromRecognition();
-
-      // No info dialog - just update the student statuses silently
-    } catch (e) {
-      setState(() {
-        _isProcessing = false;
-      });
-      _showErrorDialog('Error processing image: $e');
-    }
   }
 
-  void _updateStudentStatusesFromRecognition() {
-    // Reset all students to absent first
-    _initializeStudentStatuses();
+  // ─────────────────────────────────────────────────────────────────
+  // Process all pending images sequentially
+  // ─────────────────────────────────────────────────────────────────
 
-    debugPrint('=== UPDATING STUDENT STATUSES FROM RECOGNITION ===');
-    debugPrint('Recognition results: ${_recognitionResults.length}');
-    debugPrint('Class students: ${widget.classModel.students.length}');
+  Future<void> _processAllImages() async {
+    if (_images.isEmpty) return;
 
-    // Print all recognition results
-    for (int i = 0; i < _recognitionResults.length; i++) {
-      final result = _recognitionResults[i];
-      debugPrint(
-          'Recognition $i: "${result.name}" (${(result.similarityScore * 100).toStringAsFixed(1)}%)');
-    }
+    setState(() => _isProcessing = true);
 
-    // Print all class students
-    debugPrint('Class students:');
-    for (var student in widget.classModel.students) {
-      debugPrint('  - ${student.name} (${student.rno})');
-    }
+    final List<String> allowedRollNumbers =
+        widget.classModel.students.map((s) => s.rno).toList();
 
-    int matchedCount = 0;
-    Set<String> matchedRollNumbers = {}; // Track already matched students
+    for (int i = 0; i < _images.length; i++) {
+      final entry = _images[i];
+      if (entry.status != ImageStatus.pending) continue; // skip already done
 
-    // Mark recognized students as present (only if similarity >= threshold)
-    for (var result in _recognitionResults) {
-      // Check similarity threshold
-      if (result.similarityScore < _similarityThreshold) {
-        debugPrint(
-            '✗ BELOW THRESHOLD: "${result.name}" (${(result.similarityScore * 100).toStringAsFixed(1)}% < ${(_similarityThreshold * 100).toStringAsFixed(0)}%)');
-        continue;
-      }
-      
-      // PRIMARY: Use personId (roll number) for direct matching
-      if (result.personId != null && result.personId!.isNotEmpty) {
-        // Direct roll number match - EXACT and RELIABLE
-        var student = widget.classModel.students.firstWhere(
-          (s) => s.rno == result.personId,
-          orElse: () => throw StateError('not found'),
+      setState(() {
+        _currentProcessingIndex = i;
+        entry.status = ImageStatus.processing;
+      });
+
+      try {
+        final apiResult = await _apiService.processImageForAttendance(
+          entry.file,
+          allowedRollNumbers: allowedRollNumbers,
         );
-        
-        try {
-          if (!matchedRollNumbers.contains(student.rno)) {
-            debugPrint(
-                '✓ ROLL_NO MATCH: ${result.personId} -> ${student.name} (${student.rno})');
-            _studentStatuses[student.rno] = 'present';
-            matchedRollNumbers.add(student.rno);
-            matchedCount++;
-          }
-        } catch (e) {
-          debugPrint('✗ Roll no "${result.personId}" not in class roster (should not happen with filtering)');
-        }
-        continue;
-      }
-      
-      // FALLBACK: Use name-based matching for legacy data (faces enrolled without roll_no)
-      debugPrint('⚠️ No personId for "${result.name}", falling back to name matching');
-      bool found = false;
-      final recognizedName = result.name.toLowerCase().trim();
-      
-      // Normalize recognized name (remove extra spaces, special chars)
-      final normalizedRecognizedName = recognizedName
-          .replaceAll(RegExp(r'[^\w\s]'), '') // Remove special chars
-          .replaceAll(RegExp(r'\s+'), ' '); // Normalize spaces
 
-      // Strategy 1: Exact match
-      for (var student in widget.classModel.students) {
-        if (matchedRollNumbers.contains(student.rno)) continue; // Skip already matched
-        
-        final studentName = student.name.toLowerCase().trim();
-        if (studentName == recognizedName) {
-          debugPrint(
-              '✓ EXACT NAME MATCH: "${result.name}" -> ${student.name} (${student.rno})');
-          _studentStatuses[student.rno] = 'present';
-          matchedRollNumbers.add(student.rno);
-          matchedCount++;
-          found = true;
-          break;
-        }
-      }
+        entry.processedImagePath = apiResult.$1;
+        entry.results = apiResult.$2;
+        entry.matchedRollNumbers = _matchResultsToRoster(apiResult.$2);
+        entry.status = ImageStatus.completed;
 
-      // Strategy 2: Normalized match (handles extra spaces, special chars)
-      if (!found) {
-        for (var student in widget.classModel.students) {
-          if (matchedRollNumbers.contains(student.rno)) continue;
-          
-          final normalizedStudentName = student.name.toLowerCase().trim()
-              .replaceAll(RegExp(r'[^\w\s]'), '')
-              .replaceAll(RegExp(r'\s+'), ' ');
-          
-          if (normalizedStudentName == normalizedRecognizedName) {
-            debugPrint(
-                '✓ NORMALIZED NAME MATCH: "${result.name}" -> ${student.name} (${student.rno})');
-            _studentStatuses[student.rno] = 'present';
-            matchedRollNumbers.add(student.rno);
-            matchedCount++;
-            found = true;
-            break;
+        // Merge into union
+        _unionRollNumbers.addAll(entry.matchedRollNumbers);
+        for (var result in entry.results) {
+          if (result.similarityScore >= _similarityThreshold) {
+            final rollNo = result.personId ?? '';
+            if (rollNo.isEmpty) continue;
+            final existing = _bestResults[rollNo];
+            if (existing == null ||
+                result.similarityScore > existing.similarityScore) {
+              _bestResults[rollNo] = result;
+            }
           }
         }
-      }
 
-      // Strategy 3: First name match (if recognized name is single word)
-      if (!found && !recognizedName.contains(' ')) {
-        for (var student in widget.classModel.students) {
-          if (matchedRollNumbers.contains(student.rno)) continue;
-          
-          final studentFirstName = student.name.split(' ').first.toLowerCase().trim();
-          if (studentFirstName == recognizedName) {
-            debugPrint(
-                '✓ FIRST NAME MATCH: "${result.name}" -> ${student.name} (${student.rno})');
-            _studentStatuses[student.rno] = 'present';
-            matchedRollNumbers.add(student.rno);
-            matchedCount++;
-            found = true;
-            break;
-          }
+        // Update student statuses live
+        for (var rollNo in entry.matchedRollNumbers) {
+          _studentStatuses[rollNo] = 'present';
         }
-      }
 
-      if (!found) {
-        debugPrint('✗ NO NAME MATCH: "${result.name}" not found in class roster');
+        setState(() {}); // refresh UI after each image
+      } catch (e) {
+        entry.status = ImageStatus.failed;
+        entry.errorMessage = e.toString();
+        setState(() {});
+        debugPrint('Image $i failed: $e');
+        // Continue with remaining images
       }
     }
 
-    final aboveThreshold = _recognitionResults.where((r) => r.similarityScore >= _similarityThreshold).length;
-    
-    debugPrint('=== RECOGNITION UPDATE COMPLETE ===');
-    debugPrint('Total recognition results: ${_recognitionResults.length}');
-    debugPrint('Above threshold (${(_similarityThreshold * 100).toStringAsFixed(0)}%): $aboveThreshold');
-    debugPrint('Matched students: $matchedCount');
-    debugPrint('Unmatched recognitions: ${aboveThreshold - matchedCount}');
-    debugPrint('Final student statuses: $_studentStatuses');
-    debugPrint(
-        'Present count: ${_studentStatuses.values.where((status) => status == 'present').length}');
-    
-    // Show snackbar with results
+    setState(() {
+      _isProcessing = false;
+      _currentProcessingIndex = -1;
+    });
+
+    // Snackbar summary
     if (mounted) {
-      final presentCount = _studentStatuses.values.where((s) => s == 'present').length;
+      final presentCount =
+          _studentStatuses.values.where((s) => s == 'present').length;
+      final completedCount =
+          _images.where((e) => e.status == ImageStatus.completed).length;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✓ Detected ${_recognitionResults.length} faces, matched $matchedCount students (threshold: ${(_similarityThreshold * 100).toStringAsFixed(0)}%)'),
-          backgroundColor: matchedCount > 0 ? Colors.green : Colors.orange,
+          content: Text(
+              '$presentCount students marked present from $completedCount images'),
+          backgroundColor: presentCount > 0 ? Colors.green : Colors.orange,
           duration: const Duration(seconds: 3),
         ),
       );
     }
+  }
+
+  /// Match recognition results to class roster and return matched roll numbers.
+  Set<String> _matchResultsToRoster(List<RecognitionResultModel> results) {
+    Set<String> matched = {};
+
+    for (var result in results) {
+      if (result.similarityScore < _similarityThreshold) continue;
+
+      // PRIMARY: personId (roll number) matching
+      if (result.personId != null && result.personId!.isNotEmpty) {
+        final inRoster = widget.classModel.students.any(
+          (s) => s.rno == result.personId,
+        );
+        if (inRoster && !matched.contains(result.personId!)) {
+          matched.add(result.personId!);
+          debugPrint(
+              '✓ MATCHED: ${result.personId} (${(result.similarityScore * 100).toStringAsFixed(1)}%)');
+        }
+        continue;
+      }
+
+      // FALLBACK: name-based matching
+      final recognizedName = result.name.toLowerCase().trim();
+      final normalizedRecognizedName = recognizedName
+          .replaceAll(RegExp(r'[^\w\s]'), '')
+          .replaceAll(RegExp(r'\s+'), ' ');
+
+      for (var student in widget.classModel.students) {
+        if (matched.contains(student.rno)) continue;
+        final studentName = student.name.toLowerCase().trim();
+        final normalizedStudentName = studentName
+            .replaceAll(RegExp(r'[^\w\s]'), '')
+            .replaceAll(RegExp(r'\s+'), ' ');
+
+        if (studentName == recognizedName ||
+            normalizedStudentName == normalizedRecognizedName ||
+            (!recognizedName.contains(' ') &&
+                student.name.split(' ').first.toLowerCase().trim() ==
+                    recognizedName)) {
+          matched.add(student.rno);
+          debugPrint(
+              '✓ NAME MATCHED: "${result.name}" -> ${student.name} (${student.rno})');
+          break;
+        }
+      }
+    }
+    return matched;
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // UI helpers
+  // ─────────────────────────────────────────────────────────────────
+
+  void _toggleStudentStatus(String rollNo) {
+    setState(() {
+      final current = _studentStatuses[rollNo] ?? 'absent';
+      _studentStatuses[rollNo] = current == 'present' ? 'absent' : 'present';
+    });
   }
 
   void _showErrorDialog(String message) {
@@ -353,45 +392,178 @@ class _FaceRecognitionAttendancePageState
     );
   }
 
-  void _toggleStudentStatus(String rollNo) {
-    setState(() {
-      final currentStatus = _studentStatuses[rollNo] ?? 'absent';
-      _studentStatuses[rollNo] =
-          currentStatus == 'present' ? 'absent' : 'present';
-    });
+  // ─────────────────────────────────────────────────────────────────
+  // Detailed results view
+  // ─────────────────────────────────────────────────────────────────
+
+  void _showDetailedResults() {
+    final completedEntries =
+        _images.where((e) => e.status == ImageStatus.completed).toList();
+
+    // Gather all results across images, deduplicated by roll number (best score)
+    final Map<String, _DetailedResult> allResults = {};
+    for (int imgIdx = 0; imgIdx < completedEntries.length; imgIdx++) {
+      final entry = completedEntries[imgIdx];
+      for (var r in entry.results) {
+        if (r.similarityScore < _similarityThreshold) continue;
+        final key = r.personId ?? r.name;
+        final existing = allResults[key];
+        if (existing == null ||
+            r.similarityScore > existing.result.similarityScore) {
+          allResults[key] = _DetailedResult(
+            result: r,
+            imageIndex: imgIdx,
+          );
+        }
+        // Track all images this person appeared in
+        allResults[key]!.imageIndices.add(imgIdx);
+      }
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => Scaffold(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          appBar: AppBar(
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            foregroundColor: Theme.of(context).colorScheme.onPrimary,
+            title: const Text('Face API Results'),
+          ),
+          body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // ── Processed Images with bounding boxes ──
+              Text(
+                'Processed Images (${completedEntries.length})',
+                style: const TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              ...List.generate(completedEntries.length, (i) {
+                final entry = completedEntries[i];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Image ${i + 1} — ${entry.matchedRollNumbers.length} students found',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      GestureDetector(
+                        onTap: () => _showImageInFullScreen(
+                            ctx, entry.processedImagePath!),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(
+                            File(entry.processedImagePath!),
+                            width: double.infinity,
+                            fit: BoxFit.fitWidth,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+
+              const Divider(height: 32),
+
+              // ── All recognized students ──
+              Text(
+                'Recognized Students (${allResults.length})',
+                style: const TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              if (allResults.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No students recognized above threshold.'),
+                )
+              else
+                ...allResults.entries.map((e) {
+                  final detail = e.value;
+                  final r = detail.result;
+                  final pct =
+                      (r.similarityScore * 100).toStringAsFixed(1);
+                  final imgList = detail.imageIndices
+                      .toList()
+                      .map((idx) => 'Img ${idx + 1}')
+                      .join(', ');
+                  // Try to find student name from roster
+                  String displayName = r.name;
+                  if (r.personId != null) {
+                    try {
+                      final student = widget.classModel.students
+                          .firstWhere((s) => s.rno == r.personId);
+                      displayName = student.name;
+                    } catch (_) {}
+                  }
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.green,
+                        child: Text(
+                          displayName.isNotEmpty
+                              ? displayName[0].toUpperCase()
+                              : '?',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      title: Text(displayName),
+                      subtitle: Text(
+                        'Roll: ${r.personId ?? 'N/A'} • $pct% match • $imgList',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '$pct%',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.green.shade800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // Save attendance
+  // ─────────────────────────────────────────────────────────────────
+
   Future<void> _proceedToConfirmation() async {
-    // Validate that an image has been uploaded and processed
-    if (_processedImagePath == null || _processedImagePath!.isEmpty) {
+    if (!_hasProcessed) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please upload an image before saving attendance'),
+          content: Text('Please process images before saving attendance'),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 3),
         ),
       );
       return;
-    }
-
-    // Ensure we have student statuses initialized
-    if (_studentStatuses.isEmpty) {
-      _initializeStudentStatuses();
-    }
-
-    final presentCount =
-        _studentStatuses.values.where((status) => status == 'present').length;
-
-    if (_recognitionResults.isEmpty && presentCount == 0) {
-      // For testing: Mark first few students as present if no recognition results
-      debugPrint(
-          'No recognition results and no present students. Marking first 3 students as present for testing.');
-      for (int i = 0; i < widget.classModel.students.length && i < 3; i++) {
-        final student = widget.classModel.students[i];
-        _studentStatuses[student.rno] = 'present';
-        debugPrint(
-            'Marked ${student.name} (${student.rno}) as present for testing');
-      }
     }
 
     // Show loading dialog
@@ -406,39 +578,24 @@ class _FaceRecognitionAttendancePageState
     );
 
     try {
-      // Debug: Print the data being saved
-      debugPrint('=== SAVING ATTENDANCE ===');
-      debugPrint('Class ID: ${widget.classModel.id}');
-      debugPrint('Class name: ${widget.classModel.name}');
-      debugPrint(
-          'Total students in class: ${widget.classModel.students.length}');
-      debugPrint('Student statuses map: $_studentStatuses');
-      debugPrint('Student statuses count: ${_studentStatuses.length}');
-      debugPrint('Present students: $presentCount');
-      debugPrint('Recognition results: ${_recognitionResults.length}');
+      // Use the first completed processed image path for the record
+      final firstCompleted =
+          _images.where((e) => e.status == ImageStatus.completed).firstOrNull;
 
-      // Verify the data structure
-      for (var entry in _studentStatuses.entries) {
-        debugPrint('Student ${entry.key}: ${entry.value}');
-      }
-
-      // Save attendance directly
       final attendanceRecord = AttendanceModel(
         id: '',
         classId: widget.classModel.docId!,
         date: _selectedDate.toIso8601String().split('T')[0],
         studentStatuses: Map<String, String>.from(_studentStatuses),
-        processedImagePath: _processedImagePath,
+        processedImagePath: firstCompleted?.processedImagePath,
       );
 
       await context
           .read<HttpDataService>()
           .saveAttendanceRecord(attendanceRecord);
 
-      // Close loading dialog
-      if (mounted) Navigator.pop(context);
+      if (mounted) Navigator.pop(context); // close loading
 
-      // Show success message and go back
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -453,18 +610,10 @@ class _FaceRecognitionAttendancePageState
             duration: Duration(seconds: 2),
           ),
         );
-
-        // Go back to class detail page
         Navigator.pop(context, true);
       }
     } catch (e) {
-      // Close loading dialog
       if (mounted) Navigator.pop(context);
-
-      debugPrint('Error saving attendance: $e');
-      debugPrint('Stack trace: ${StackTrace.current}');
-
-      // Show error message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -477,8 +626,20 @@ class _FaceRecognitionAttendancePageState
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // BUILD
+  // ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
+    final presentCount =
+        _studentStatuses.values.where((s) => s == 'present').length;
+    final completedCount =
+        _images.where((e) => e.status == ImageStatus.completed).length;
+    final pendingCount =
+        _images.where((e) => e.status == ImageStatus.pending).length;
+    final processedTotal = _images.length - pendingCount;
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.primary,
@@ -487,9 +648,9 @@ class _FaceRecognitionAttendancePageState
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
+            const Text(
               'Face Recognition Attendance',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             Text(
               '${widget.classModel.name} | Code: ${widget.classModel.id} | Section: ${widget.classModel.section}',
@@ -499,432 +660,619 @@ class _FaceRecognitionAttendancePageState
           ],
         ),
       ),
-      body: Stack(
+      body: Column(
         children: [
-          Column(
-            children: [
-              // Image display section
-              Expanded(
-                flex: 2,
-                child: Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: _processedImagePath != null
-                      ? GestureDetector(
-                          onTap: () => _showImageInFullScreen(
-                              context, _processedImagePath!),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Stack(
-                              children: [
-                                Image.file(
-                                  File(_processedImagePath!),
-                                  width: double.infinity,
-                                  height: double.infinity,
-                                  fit: BoxFit.cover,
-                                ),
-                                // Overlay to indicate it's clickable
-                                Positioned(
-                                  top: 8,
-                                  right: 8,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.6),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: const Icon(
-                                      Icons.zoom_in,
-                                      color: Colors.white,
-                                      size: 16,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      : Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.camera_alt_outlined,
-                              size: 64,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No image selected',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Tap the camera button to take a photo',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          ],
-                        ),
-                ),
+          // ── IMAGE GRID SECTION ──
+          Expanded(
+            flex: 2,
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(12),
               ),
-
-              // Student list section
-              Expanded(
-                flex: 3,
-                child: Container(
-                  margin: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primaryContainer,
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(12),
-                            topRight: Radius.circular(12),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.people),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Student List (${widget.classModel.students.length})',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                      if (_recognitionResults.isNotEmpty)
-                                        Text(
-                                          '${_studentStatuses.values.where((s) => s == 'present').length} present • ${_recognitionResults.length} faces detected',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey[700],
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                const Icon(Icons.calendar_month, size: 18),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Date: ${_selectedDate.toIso8601String().split('T')[0]}',
-                                  style: const TextStyle(color: Colors.white),
-                                ),
-                              ],
-                            ),
-                          ],
+              child: Column(
+                children: [
+                  // Progress header (shown during / after processing)
+                  if (_isProcessing || _hasProcessed)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color:
+                            Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
                         ),
                       ),
-                      Expanded(
-                        child: ListView.builder(
-                          itemCount: widget.classModel.students.length,
-                          itemBuilder: (context, index) {
-                            final student = widget.classModel.students[index];
-                            final status =
-                                _studentStatuses[student.rno] ?? 'absent';
-                            final isPresent = status == 'present';
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                _isProcessing
+                                    ? Icons.hourglass_top
+                                    : Icons.check_circle,
+                                size: 18,
+                                color: _isProcessing
+                                    ? Colors.orange
+                                    : Colors.green,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _isProcessing
+                                      ? 'Processing ${_currentProcessingIndex + 1} of ${_images.length} images...'
+                                      : '$presentCount students present (from $completedCount images)',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                              if (_hasProcessed && !_isProcessing)
+                                GestureDetector(
+                                  onTap: _showDetailedResults,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.9),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.visibility,
+                                            size: 14,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Details',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: _images.isEmpty
+                                  ? 0
+                                  : processedTotal / _images.length,
+                              minHeight: 6,
+                              backgroundColor: Colors.grey.shade300,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                _isProcessing
+                                    ? Colors.orange
+                                    : Colors.green,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
 
-                            // Find the recognition result for this student
-                            RecognitionResultModel? recognitionResult;
-                            try {
-                              recognitionResult =
-                                  _recognitionResults.firstWhere(
-                                (result) =>
-                                    result.name.toLowerCase().trim() ==
-                                        student.name.toLowerCase().trim() ||
-                                    student.name
-                                        .toLowerCase()
-                                        .contains(result.name.toLowerCase()) ||
-                                    result.name
-                                        .toLowerCase()
-                                        .contains(student.name.toLowerCase()),
-                              );
-                            } catch (e) {
-                              recognitionResult = null;
-                            }
+                  // Image grid or empty placeholder
+                  Expanded(
+                    child: _images.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_photo_alternate_outlined,
+                                    size: 64, color: Colors.grey.shade400),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No images selected',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      color: Colors.grey.shade600),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Add photos to start face recognition',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade500),
+                                ),
+                              ],
+                            ),
+                          )
+                        : GridView.builder(
+                            padding: const EdgeInsets.all(8),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 8,
+                              mainAxisSpacing: 8,
+                            ),
+                            itemCount: _images.length,
+                            itemBuilder: (context, index) {
+                              final entry = _images[index];
+                              final isCurrentlyProcessing =
+                                  _isProcessing &&
+                                      index == _currentProcessingIndex;
 
-                            // Build subtitle with similarity percentage if recognized
-                            String subtitle = 'Roll No: ${student.rno}';
-                            if (recognitionResult != null) {
-                              final similarityPercent =
-                                  (recognitionResult.similarityScore * 100)
-                                      .toStringAsFixed(1);
-                              subtitle =
-                                  'Roll No: ${student.rno} - ${similarityPercent}% match';
-                            }
-
-                            return ListTile(
-                              key: ValueKey(student.rno),
-                              leading: CircleAvatar(
-                                radius: 20,
-                                child: student.photoUrl.isNotEmpty
-                                    ? ClipOval(
-                                        child: CachedNetworkImage(
-                                          imageUrl: student.photoUrl,
-                                          cacheManager: null,
-                                          imageBuilder:
-                                              (context, imageProvider) => Image(
-                                            image: imageProvider,
-                                            width: 40,
-                                            height: 40,
+                              return Stack(
+                                children: [
+                                  // Image
+                                  GestureDetector(
+                                    onTap: entry.processedImagePath != null
+                                        ? () => _showImageInFullScreen(
+                                            context,
+                                            entry.processedImagePath!)
+                                        : null,
+                                    child: ClipRRect(
+                                      borderRadius:
+                                          BorderRadius.circular(8),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color: isCurrentlyProcessing
+                                                ? Colors.orange
+                                                : entry.status ==
+                                                        ImageStatus.completed
+                                                    ? Colors.green
+                                                    : entry.status ==
+                                                            ImageStatus.failed
+                                                        ? Colors.red
+                                                        : Colors
+                                                            .grey.shade300,
+                                            width: isCurrentlyProcessing
+                                                ? 3
+                                                : 2,
+                                          ),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          child: Image.file(
+                                            entry.file,
+                                            width: double.infinity,
+                                            height: double.infinity,
                                             fit: BoxFit.cover,
                                           ),
-                                          placeholder: (context, url) =>
-                                              Container(
-                                            width: 40,
-                                            height: 40,
-                                            color: Colors.grey.shade200,
-                                          ),
-                                          errorWidget: (context, url, error) =>
-                                              Text(
-                                            student.name.isNotEmpty
-                                                ? student.name[0].toUpperCase()
-                                                : '?',
-                                          ),
-                                        ),
-                                      )
-                                    : Text(student.name.isNotEmpty
-                                        ? student.name[0].toUpperCase()
-                                        : '?'),
-                              ),
-                              title: Text(student.name),
-                              subtitle: Text(subtitle),
-                              trailing: GestureDetector(
-                                onTap: () => _toggleStudentStatus(student.rno),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color:
-                                        isPresent ? Colors.green : Colors.red,
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        isPresent ? Icons.check : Icons.close,
-                                        color: Colors.white,
-                                        size: 16,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        isPresent ? 'Present' : 'Absent',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12,
                                         ),
                                       ),
-                                    ],
+                                    ),
                                   ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
 
-              // Action buttons
-              Container(
-                padding: const EdgeInsets.all(16),
-                child: _processedImagePath == null ||
-                        _processedImagePath!.isEmpty
-                    ?
-                    // Before photo upload: Show only "Take Photo" button
-                    SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _isProcessing ? null : _pickImage,
-                          icon: const Icon(Icons.camera_alt),
-                          label: const Text('Take Photo'),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            backgroundColor: _isProcessing
-                                ? Colors.grey
-                                : Theme.of(context).colorScheme.primary,
-                            foregroundColor: Colors.white,
+                                  // Status badge (bottom-left)
+                                  if (entry.status !=
+                                      ImageStatus.pending)
+                                    Positioned(
+                                      bottom: 4,
+                                      left: 4,
+                                      child: Container(
+                                        padding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 6,
+                                                vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: entry.status ==
+                                                  ImageStatus.completed
+                                              ? Colors.green
+                                              : entry.status ==
+                                                      ImageStatus
+                                                          .processing
+                                                  ? Colors.orange
+                                                  : Colors.red,
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                        child: Text(
+                                          entry.status ==
+                                                  ImageStatus.completed
+                                              ? '${entry.matchedRollNumbers.length} found'
+                                              : entry.status ==
+                                                      ImageStatus
+                                                          .processing
+                                                  ? '...'
+                                                  : 'Error',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                  // Remove button (top-right)
+                                  if (!_isProcessing)
+                                    Positioned(
+                                      top: 2,
+                                      right: 2,
+                                      child: GestureDetector(
+                                        onTap: () => _removeImage(index),
+                                        child: Container(
+                                          padding:
+                                              const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black
+                                                .withOpacity(0.6),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.close,
+                                            color: Colors.white,
+                                            size: 16,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                  // Processing spinner overlay
+                                  if (isCurrentlyProcessing)
+                                    Positioned.fill(
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.black
+                                              .withOpacity(0.4),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: const Center(
+                                          child:
+                                              CircularProgressIndicator(
+                                            strokeWidth: 3,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<
+                                                    Color>(
+                                              Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              );
+                            },
                           ),
-                        ),
-                      )
-                    :
-                        // After photo upload: Show "Retake Photo", "Save Attendance", and "Confirm with Bluetooth"
-                        Column(
-                            children: [
-                              // First row: Retake Photo (full width)
-                              SizedBox(
-                                width: double.infinity,
-                                child: OutlinedButton.icon(
-                                  onPressed: _isProcessing ? null : _pickImage,
-                                  icon: const Icon(Icons.refresh),
-                                  label: const Text('Retake Photo'),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 16),
-                                    side: BorderSide(
-                                      color:
-                                          Theme.of(context).colorScheme.primary,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              // Second row: Save Attendance and Confirm with Bluetooth
-                              Row(
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── STUDENT LIST SECTION ──
+          Expanded(
+            flex: 3,
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.people),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                 children: [
-                                  Expanded(
-                                    child: ElevatedButton.icon(
-                                      onPressed: _isProcessing
-                                          ? null
-                                          : _proceedToConfirmation,
-                                      icon: const Icon(Icons.save),
-                                      label: const Text('Save'),
-                                      style: ElevatedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 16),
-                                        backgroundColor: Colors.green,
-                                        foregroundColor: Colors.white,
-                                      ),
+                                  Text(
+                                    'Student List (${widget.classModel.students.length})',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: ElevatedButton.icon(
-                                      onPressed: _isProcessing
-                                          ? null
-                                          : () {
-                                              // Navigate to orchestration page with face recognition results
-                                              Navigator.pushReplacement(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      AttendanceOrchestrationPage(
-                                                    classModel: widget.classModel,
-                                                    initialStudentStatuses: _studentStatuses,
-                                                    processedImagePath: _processedImagePath,
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                      icon: const Icon(Icons.bluetooth_searching),
-                                      label: const Text('+ Bluetooth'),
-                                      style: ElevatedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 16),
-                                        backgroundColor:
-                                            Theme.of(context).colorScheme.primary,
-                                        foregroundColor: Colors.white,
+                                  if (_hasProcessed)
+                                    Text(
+                                      '$presentCount present • ${_images.length} images',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[700],
                                       ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.calendar_month, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Date: ${_selectedDate.toIso8601String().split('T')[0]}',
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: widget.classModel.students.length,
+                      itemBuilder: (context, index) {
+                        final student =
+                            widget.classModel.students[index];
+                        final status =
+                            _studentStatuses[student.rno] ?? 'absent';
+                        final isPresent = status == 'present';
+
+                        // Look up best result for this student
+                        final bestResult =
+                            _bestResults[student.rno];
+
+                        String subtitle = 'Roll No: ${student.rno}';
+                        if (bestResult != null) {
+                          final pct =
+                              (bestResult.similarityScore * 100)
+                                  .toStringAsFixed(1);
+                          subtitle =
+                              'Roll No: ${student.rno} - $pct% match';
+                        }
+
+                        return ListTile(
+                          key: ValueKey(student.rno),
+                          leading: CircleAvatar(
+                            radius: 20,
+                            child: student.photoUrl.isNotEmpty
+                                ? ClipOval(
+                                    child: CachedNetworkImage(
+                                      imageUrl: student.photoUrl,
+                                      cacheManager: null,
+                                      imageBuilder:
+                                          (context, imageProvider) =>
+                                              Image(
+                                        image: imageProvider,
+                                        width: 40,
+                                        height: 40,
+                                        fit: BoxFit.cover,
+                                      ),
+                                      placeholder: (context, url) =>
+                                          Container(
+                                        width: 40,
+                                        height: 40,
+                                        color: Colors.grey.shade200,
+                                      ),
+                                      errorWidget:
+                                          (context, url, error) => Text(
+                                        student.name.isNotEmpty
+                                            ? student.name[0]
+                                                .toUpperCase()
+                                            : '?',
+                                      ),
+                                    ),
+                                  )
+                                : Text(student.name.isNotEmpty
+                                    ? student.name[0].toUpperCase()
+                                    : '?'),
+                          ),
+                          title: Text(student.name),
+                          subtitle: Text(subtitle),
+                          trailing: GestureDetector(
+                            onTap: () =>
+                                _toggleStudentStatus(student.rno),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isPresent
+                                    ? Colors.green
+                                    : Colors.red,
+                                borderRadius:
+                                    BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isPresent
+                                        ? Icons.check
+                                        : Icons.close,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    isPresent
+                                        ? 'Present'
+                                        : 'Absent',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
                                     ),
                                   ),
                                 ],
                               ),
-                            ],
-                          )
-              ),
-            ],
-          ),
-          // Loading overlay
-          if (_isProcessing)
-            Container(
-              color: Colors.black.withOpacity(0.7),
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                            Theme.of(context).colorScheme.primary),
-                        strokeWidth: 3,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Processing Image...',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Detecting faces and recognizing students',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.black,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: Theme.of(context).colorScheme.primary),
-                        ),
-                        child: Text(
-                          'This may take a few seconds',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ),
-                      ),
-                    ],
+                        );
+                      },
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
+          ),
+
+          // ── ACTION BUTTONS ──
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: _buildActionButtons(),
+          ),
         ],
       ),
     );
   }
+
+  Widget _buildActionButtons() {
+    // State 1: No images yet – show Add Photos button
+    if (_images.isEmpty) {
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: _pickImages,
+          icon: const Icon(Icons.add_photo_alternate),
+          label: const Text('Add Photos'),
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            foregroundColor: Colors.white,
+          ),
+        ),
+      );
+    }
+
+    // State 2: Images selected but not all processed – show Add More + Take Attendance
+    if (!_allProcessed || _images.any((e) => e.status == ImageStatus.pending)) {
+      return Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isProcessing ? null : _pickImages,
+                  icon: const Icon(Icons.add_photo_alternate),
+                  label: const Text('Add More'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: BorderSide(
+                        color: Theme.of(context).colorScheme.primary),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _isProcessing ? null : _processAllImages,
+                  icon: Icon(_isProcessing
+                      ? Icons.hourglass_top
+                      : Icons.face_retouching_natural),
+                  label: Text(
+                      _isProcessing ? 'Processing...' : 'Take Attendance'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: _isProcessing
+                        ? Colors.grey
+                        : Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    // State 3: All processed – show Add More, Save, + Bluetooth
+    return Column(
+      children: [
+        // Add more photos row
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _isProcessing ? null : _pickImages,
+            icon: const Icon(Icons.add_photo_alternate),
+            label: const Text('Add More Photos'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              side:
+                  BorderSide(color: Theme.of(context).colorScheme.primary),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Save + Bluetooth row
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _isProcessing ? null : _proceedToConfirmation,
+                icon: const Icon(Icons.save),
+                label: const Text('Save'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _isProcessing
+                    ? null
+                    : () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AttendanceOrchestrationPage(
+                              classModel: widget.classModel,
+                              initialStudentStatuses: _studentStatuses,
+                              processedImagePath: _images
+                                  .where((e) =>
+                                      e.status == ImageStatus.completed)
+                                  .firstOrNull
+                                  ?.processedImagePath,
+                            ),
+                          ),
+                        );
+                      },
+                icon: const Icon(Icons.bluetooth_searching),
+                label: const Text('+ Bluetooth'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Helper to track which images a recognized person appeared in.
+class _DetailedResult {
+  final RecognitionResultModel result;
+  final int imageIndex;
+  final Set<int> imageIndices;
+
+  _DetailedResult({required this.result, required this.imageIndex})
+      : imageIndices = {imageIndex};
 }
