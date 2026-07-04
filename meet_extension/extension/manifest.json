@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Auto Meet Snapper",
+  "version": "2.0",
+  "description": "Automatically takes random photos in Google Meet.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads",
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["content.js"]
+    }
+  ]
+}

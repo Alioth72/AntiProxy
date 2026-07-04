@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Video Conference</title>
+    <link rel="shortcut icon" type="image/ico" href="/favicon.ico" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/main.css" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+
+<body>
+    <!-- Animated Background -->
+    <div class="animated-bg">
+        <div class="bg-shape bg-shape-1"></div>
+        <div class="bg-shape bg-shape-2"></div>
+        <div class="bg-shape bg-shape-3"></div>
+    </div>
+
+    <!-- Pre-Join Screen -->
+    <div id="preJoinScreen" class="pre-join-container">
+        <div class="pre-join-card">
+            <div class="pre-join-header">
+                <div class="logo">
+                    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="48" height="48" rx="12" fill="url(#gradient1)" />
+                        <path
+                            d="M14 18C14 16.8954 14.8954 16 16 16H32C33.1046 16 34 16.8954 34 18V30C34 31.1046 33.1046 32 32 32H16C14.8954 32 14 31.1046 14 30V18Z"
+                            stroke="white" stroke-width="2" />
+                        <circle cx="24" cy="24" r="4" fill="white" />
+                        <path d="M34 21L38 18V30L34 27" stroke="white" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                        <defs>
+                            <linearGradient id="gradient1" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+                                <stop stop-color="#667eea" />
+                                <stop offset="1" stop-color="#764ba2" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <h1>Join Meeting</h1>
+                <p class="subtitle">Enter your details to join the video conference</p>
+                <!-- Teacher Login -->
+                <div id="teacherLoginContainer" style="margin-top: 1rem; text-align: center;">
+                    <div id="g_id_onload" data-client_id="614674911910-xxxxxxxxxxxxxxxx.apps.googleusercontent.com"
+                        data-callback="handleCredentialResponse" data-auto_prompt="false">
+                    </div>
+                    <div class="g_id_signin" data-type="standard"></div>
+                </div>
+            </div>
+            <form id="preJoinForm">
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        <input id="userName" type="text" placeholder=" " required autocomplete="name" />
+                        <label for="userName">Your Name</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z">
+                            </path>
+                            <polyline points="22,6 12,13 2,6"></polyline>
+                        </svg>
+                        <input id="userEmail" type="email" placeholder=" " required autocomplete="email" />
+                        <label for="userEmail">Email Address</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+                            <polyline points="10 17 15 12 10 7"></polyline>
+                            <line x1="15" y1="12" x2="3" y2="12"></line>
+                        </svg>
+                        <input id="roomId" type="text" placeholder=" " required />
+                        <label for="roomId">Room ID</label>
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary">
+                    <span>Join Room</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                        <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                </button>
+            </form>
+            <div class="pre-join-footer">
+                <p>By joining, you agree to our terms of service</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Conference Screen -->
+    <div id="conferenceScreen" class="conference-container" style="display: none;">
+        <!-- Header -->
+        <header class="conference-header">
+            <div class="header-left">
+                <div class="header-logo">
+                    <svg width="32" height="32" viewBox="0 0 48 48" fill="none">
+                        <rect width="48" height="48" rx="12" fill="url(#gradient2)" />
+                        <path
+                            d="M14 18C14 16.8954 14.8954 16 16 16H32C33.1046 16 34 16.8954 34 18V30C34 31.1046 33.1046 32 32 32H16C14.8954 32 14 31.1046 14 30V18Z"
+                            stroke="white" stroke-width="2" />
+                        <circle cx="24" cy="24" r="4" fill="white" />
+                        <defs>
+                            <linearGradient id="gradient2" x1="0" y1="0" x2="48" y2="48">
+                                <stop stop-color="#667eea" />
+                                <stop offset="1" stop-color="#764ba2" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <div class="room-info">
+                    <h1 id="roomTitle"><span id="roomName"></span></h1>
+                    <div class="meeting-time" id="meetingTimer">
+                        <span class="live-indicator"></span>
+                        <span>In Progress</span>
+                    </div>
+                </div>
+            </div>
+            <div class="header-controls">
+                <button id="downloadCsvHeaderBtn" class="btn-header" style="display: none;" title="Download Report">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span>Export</span>
+                </button>
+                <button id="toggleSidebarBtn" class="btn-icon" title="Toggle Sidebar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <!-- Participants Sidebar -->
+            <aside id="participantsSidebar" class="sidebar hidden">
+                <div class="sidebar-header">
+                    <h2>Meeting Details</h2>
+                    <button id="closeSidebarBtn" class="btn-close" aria-label="Close sidebar">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="sidebar-tabs">
+                    <button id="tabParticipants" class="tab-button active" aria-selected="true">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                        <span>People</span>
+                    </button>
+                    <button id="tabPolls" class="tab-button" aria-selected="false">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                        <span>Polls & Q&A</span>
+                    </button>
+                    <button id="tabYouTube" class="tab-button" aria-selected="false">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path
+                                d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z">
+                            </path>
+                            <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon>
+                        </svg>
+                        <span>YouTube</span>
+                    </button>
+                </div>
+                <div class="sidebar-content">
+                    <div class="tab-panel active" id="participantsTab">
+                        <div class="sidebar-section">
+                            <div class="section-header">
+                                <h3>Participants</h3>
+                                <span class="participant-count" id="participantCount">0</span>
+                            </div>
+                            <div id="participantsList" class="participants-list"></div>
+                            <button id="downloadCsvBtn" class="btn-secondary" style="display: none;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                Download CSV Report
+                            </button>
+                            <button id="syncAttendanceBtn" class="btn-primary"
+                                style="display: none; margin-top: 0.5rem; width: 100%;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path
+                                        d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+                                </svg>
+                                Sync to AIMS
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="tab-panel" id="pollsTab">
+                        <div class="sidebar-section" id="pollSidebar">
+                            <div class="section-header">
+                                <h3>Live Polls</h3>
+                            </div>
+                            <div id="pollControls" class="poll-controls">
+                                <div class="input-group">
+                                    <input id="pollQuestion" type="text" placeholder="Enter your poll question..." />
+                                </div>
+                                <div class="input-group">
+                                    <textarea id="pollOptions" placeholder="Enter options (comma or newline separated)"
+                                        rows="3"></textarea>
+                                </div>
+                                <div class="poll-buttons">
+                                    <button id="createPollBtn" class="btn-primary small">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        </svg>
+                                        Create Poll
+                                    </button>
+                                    <button id="clearPollBtn" class="btn-outline small">Clear</button>
+                                </div>
+                            </div>
+                            <div id="pollDisplay" class="poll-display">
+                                <p id="pollStatus" class="poll-status">No active poll</p>
+                                <div id="pollContent" class="poll-options"></div>
+                            </div>
+                        </div>
+
+                        <div class="sidebar-divider"></div>
+
+                        <div class="sidebar-section" id="qaSidebar">
+                            <div class="section-header">
+                                <h3>Q&A Session</h3>
+                            </div>
+                            <div id="qaForm" class="qa-form">
+                                <textarea id="qaQuestion" placeholder="Type your question here..." rows="2"></textarea>
+                                <button id="qaAskBtn" class="btn-primary small">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                    </svg>
+                                    Ask Question
+                                </button>
+                            </div>
+                            <div id="qaList" class="qa-list"></div>
+                        </div>
+                    </div>
+
+                    <div class="tab-panel" id="youtubeTab">
+                        <div class="sidebar-section">
+                            <div class="section-header">
+                                <h3>YouTube Sync</h3>
+                                <span class="admin-badge">Admin Only</span>
+                            </div>
+                            <div class="yt-controls">
+                                <div class="input-group">
+                                    <input id="ytUrlInput" type="text" placeholder="Paste YouTube URL or video ID" />
+                                </div>
+                                <div class="yt-buttons">
+                                    <button id="ytLoadBtn" class="btn-primary small">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                            <polyline points="17 8 12 3 7 8"></polyline>
+                                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                                        </svg>
+                                        Load
+                                    </button>
+                                    <button id="ytPlayBtn" class="btn-control small">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                        </svg>
+                                    </button>
+                                    <button id="ytPauseBtn" class="btn-control small">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <rect x="6" y="4" width="4" height="16"></rect>
+                                            <rect x="14" y="4" width="4" height="16"></rect>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="yt-seek">
+                                <input id="ytSeekInput" type="range" min="0" max="0" value="0" />
+                                <span id="ytTimeLabel" class="yt-time">0:00 / 0:00</span>
+                            </div>
+                            <p id="ytNotice" class="muted yt-notice">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                </svg>
+                                Attendees will see synced playback without controls
+                            </p>
+                            <div class="yt-frame-wrapper">
+                                <iframe id="ytFrame" width="100%" height="200" src=""
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Video Area -->
+            <main class="video-area" id="mainVideoArea">
+                <!-- Stage Display (Spotlight) -->
+                <div id="stageDisplay" class="stage-display hidden"></div>
+
+                <!-- Local Video -->
+                <div id="localVideo-container" class="local-video-container">
+                    <video autoplay playsinline muted></video>
+                    <div class="video-label">
+                        <span id="localUserName">You</span>
+                        <span id="localSpeakingTime" class="speaking-time">0:00</span>
+                    </div>
+                    <div class="video-controls-mini">
+                        <span class="mic-status"></span>
+                    </div>
+                </div>
+
+                <!-- Remote Videos Grid -->
+                <div id="videos" class="videos-wrapper">
+                    <div id="videoGrid" class="grid-container"></div>
+                </div>
+
+                <!-- Media Controls -->
+                <div class="controls-bar">
+                    <div class="controls-group controls-left">
+                        <div class="meeting-info-mini">
+                            <span id="currentTime"></span>
+                        </div>
+                    </div>
+
+                    <div class="controls-group controls-center">
+                        <button id="toggleAudioBtn" class="btn-control" title="Toggle Microphone"
+                            aria-label="Toggle microphone">
+                            <svg class="icon-on" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                <line x1="12" y1="19" x2="12" y2="23"></line>
+                                <line x1="8" y1="23" x2="16" y2="23"></line>
+                            </svg>
+                            <svg class="icon-off" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <line x1="1" y1="1" x2="23" y2="23"></line>
+                                <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+                                <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
+                                <line x1="12" y1="19" x2="12" y2="23"></line>
+                                <line x1="8" y1="23" x2="16" y2="23"></line>
+                            </svg>
+                        </button>
+                        <button id="toggleVideoBtn" class="btn-control" title="Toggle Camera"
+                            aria-label="Toggle camera">
+                            <svg class="icon-on" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M23 7l-7 5 7 5V7z"></path>
+                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                            </svg>
+                            <svg class="icon-off" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path
+                                    d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10">
+                                </path>
+                                <line x1="1" y1="1" x2="23" y2="23"></line>
+                            </svg>
+                        </button>
+
+                        <div class="control-divider"></div>
+
+                        <button id="shareScreenBtn" class="btn-control" title="Share Screen" aria-label="Share screen">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                <line x1="8" y1="21" x2="16" y2="21"></line>
+                                <line x1="12" y1="17" x2="12" y2="21"></line>
+                            </svg>
+                        </button>
+                        <button id="captionsBtn" class="btn-control" title="Toggle Captions"
+                            aria-label="Toggle captions">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                                <path d="M7 9h4"></path>
+                                <path d="M13 9h4"></path>
+                                <path d="M7 13h2"></path>
+                                <path d="M11 13h6"></path>
+                            </svg>
+                        </button>
+                        <button id="raiseHandBtn" class="btn-control" title="Raise Hand" aria-label="Raise hand">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path>
+                                <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"></path>
+                                <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"></path>
+                                <path
+                                    d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15">
+                                </path>
+                            </svg>
+                        </button>
+
+                        <div class="reaction-dropdown">
+                            <button id="reactionBtn" class="btn-control" title="Send Reaction"
+                                aria-label="Send reaction">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                                    <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                                    <line x1="15" y1="9" x2="15.01" y2="9"></line>
+                                </svg>
+                            </button>
+                            <div id="emojiPicker" class="emoji-picker hidden">
+                                <span data-emoji="👍" role="button" tabindex="0">👍</span>
+                                <span data-emoji="❤️" role="button" tabindex="0">❤️</span>
+                                <span data-emoji="😂" role="button" tabindex="0">😂</span>
+                                <span data-emoji="😮" role="button" tabindex="0">😮</span>
+                                <span data-emoji="👏" role="button" tabindex="0">👏</span>
+                                <span data-emoji="🎉" role="button" tabindex="0">🎉</span>
+                            </div>
+                        </div>
+
+                        <div class="control-divider"></div>
+
+                        <button id="leaveBtn" class="btn-control btn-danger" title="Leave Call" aria-label="Leave call">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path
+                                    d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91">
+                                </path>
+                                <line x1="23" y1="1" x2="1" y2="23"></line>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="controls-group controls-right">
+                        <!-- Placeholder for balance -->
+                    </div>
+                </div>
+
+                <!-- Overlays -->
+                <div id="captionsContainer" class="captions-container hidden"></div>
+                <div id="reactionOverlay" class="reaction-overlay"></div>
+            </main>
+        </div>
+
+        <!-- Active Check Modal -->
+        <div id="activeCheckModal" class="modal-overlay hidden">
+            <div class="modal-card">
+                <h2>Are you still there?</h2>
+                <p>Solve this quickly to stay in the meeting!</p>
+                <div class="math-problem" id="mathProblem">3 + 5 = ?</div>
+
+                <div class="timer-bar-container">
+                    <div id="activeTimerBar" class="timer-bar"></div>
+                </div>
+
+                <form id="activeCheckForm" style="margin-top: 1rem;">
+                    <div class="input-wrapper">
+                        <input type="number" id="mathAnswer" placeholder="Answer" required autofocus autocomplete="off">
+                    </div>
+                    <button type="submit" class="btn-primary" style="width: 100%; margin-top: 1rem;">Verify</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Notification Toast -->
+        <div id="notification" class="notification"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+    <script src="js/webrtc.js"></script>
+    <script src="js/main.js"></script>
+</body>
+
+</html>
