@@ -2,21 +2,21 @@
 
 A production-grade distributed attendance tracking system built with Flutter (frontend) and FastAPI + PostgreSQL (backend).
 
-## 🎯 Project Overview
+## Project Overview
 
 This project transforms the original Firebase-based attendance app into a **fully distributed, secure, and scalable system** with:
 
-- ✅ **FastAPI Backend** - High-performance Python REST API
-- ✅ **PostgreSQL Database** - Relational database with proper schema design
-- ✅ **Google OAuth → JWT Authentication** - Secure, stateless authentication
-- ✅ **Role-Based Access Control** - Teacher and admin permissions enforced server-side
-- ✅ **REST API** - Well-documented endpoints replacing Firestore
-- ✅ **Docker Deployment** - Containerized for easy deployment
-- ✅ **Database Migrations** - Alembic for version-controlled schema changes
+-  **FastAPI Backend** - High-performance Python REST API
+-  **PostgreSQL Database** - Relational database with proper schema design
+-  **Google OAuth → JWT Authentication** - Secure, stateless authentication
+-  **Role-Based Access Control** - Teacher and admin permissions enforced server-side
+-  **REST API** - Well-documented endpoints replacing Firestore
+-  **Docker Deployment** - Containerized for easy deployment
+-  **Database Migrations** - Alembic for version-controlled schema changes
 
 ---
 
-## 📋 Teacher Attendance Modes
+##  Teacher Attendance Modes
 
 Teachers can take attendance using **4 flexible modes** to suit different scenarios:
 
@@ -33,12 +33,12 @@ Our **default mode combines Bluetooth proximity detection with facial recognitio
 
 ---
 
-## 🔍 Comparative Analysis: Attendance Methods
+##  Comparative Analysis: Attendance Methods
 
 | Feature | **Bluetooth + Face** | Traditional Roll Call | RFID | QR Code | Manual Entry | Geofencing GPS |
 |---------|---------------------|----------------------|------|---------|--------------|----------------|
-| **Speed** | ⚡ Fast (< 30 sec) | ❌ Slow (5-10 min) | ⚡ Fast | ⚡ Fast | ❌ Slow | ⚡ Fast |
-| **Accuracy** | ✅ Very High (99%+) | ⚠️ Prone to verbal proxy | ⚠️ Card sharing possible | ⚠️ Screenshot sharing | ⚠️ Human error | ⚠️ Location spoofing |
+| **Speed** |  Fast (< 30 sec) |  Slow (5-10 min) | ⚡ Fast | ⚡ Fast | ❌ Slow | ⚡ Fast |
+| **Accuracy** | Very High (99%+) | ⚠️ Prone to verbal proxy | ⚠️ Card sharing possible | ⚠️ Screenshot sharing | ⚠️ Human error | ⚠️ Location spoofing |
 | **Fraud Prevention** | ✅ Dual verification | ❌ Easy verbal proxy | ❌ Card can be shared | ❌ QR code forwarding | ❌ No verification | ❌ GPS spoofing apps |
 | **Infrastructure Cost** | ✅ Low (uses smartphones) | ✅ None | ❌ High (readers + cards) | ✅ Low | ✅ None | ✅ Low |
 | **Scalability** | ✅ Excellent (1-1000+) | ❌ Poor (time increases linearly) | ⚠️ Moderate | ✅ Good | ❌ Poor | ✅ Good |
@@ -61,7 +61,7 @@ Our **default mode combines Bluetooth proximity detection with facial recognitio
 
 ---
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 anti-proxy-postresql/
@@ -99,7 +99,7 @@ anti-proxy-postresql/
 
 ---
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Prerequisites
 
@@ -164,7 +164,7 @@ flutter run
 
 ---
 
-## 📖 Documentation
+##  Documentation
 
 - **[Backend README](backend/README.md)** - Complete backend documentation
 - **[MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)** - Flutter app migration guide
@@ -172,7 +172,7 @@ flutter run
 
 ---
 
-## 🔐 Authentication Flow
+##  Authentication Flow
 
 ### Current System (Firebase)
 
@@ -202,7 +202,7 @@ Flutter App → Google Sign-In → Firebase Auth → Firestore
 
 ---
 
-## 🗄️ Database Schema
+## Database Schema
 
 ### Core Tables
 
@@ -224,7 +224,7 @@ See [backend/README.md](backend/README.md) for detailed schema.
 
 ---
 
-## 🔧 Development
+##  Development
 
 ### Backend Development
 
@@ -264,7 +264,7 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
 
 ---
 
-## 🎬 Migration from Firebase to PostgreSQL
+##  Migration from Firebase to PostgreSQL
 
 **Step-by-step guide:** [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)
 
@@ -282,7 +282,7 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
 
 ---
 
-## 🌐 API Endpoints
+##  API Endpoints
 
 ### Authentication
 - `POST /auth/google` - Exchange Google token for JWT
@@ -306,7 +306,7 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
 
 ---
 
-## 🔒 Security Features
+##  Security Features
 
 1. **Whitelist-Based Access** - Only emails in `allowed_emails` can sign in
 2. **Role-Based Permissions** - Teachers see only their classes, admins see all
@@ -318,7 +318,7 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
 
 ---
 
-## 🚢 Production Deployment
+##  Production Deployment
 
 ### Backend
 
@@ -356,7 +356,7 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
 
 ---
 
-## 📊 Monitoring & Logging
+##  Monitoring & Logging
 
 ### Backend Logs
 
@@ -377,7 +377,7 @@ docker-compose logs -f db
 
 ---
 
-## 🧪 Testing
+##  Testing
 
 ### Backend API Tests
 
@@ -401,7 +401,7 @@ flutter test
 
 ---
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### Backend won't start
 
@@ -427,7 +427,7 @@ flutter test
 
 ---
 
-## 📝 TODO / Future Enhancements
+##  TODO / Future Enhancements
 
 - [ ] Offline support in Flutter with local SQLite cache
 - [ ] WebSocket for real-time updates
@@ -439,7 +439,7 @@ flutter test
 
 ---
 
-## 👥 Contributors (TEAM TOINCOSS)
+##  Contributors (TEAM TOINCOSS)
 
 - Aaarat Chadda
 - Aryan Sood 
@@ -450,7 +450,7 @@ flutter test
 
 ---
 
-## 🆘 Support
+##  Support
 
 For issues:
 1. Check the documentation: [backend/README.md](backend/README.md)
